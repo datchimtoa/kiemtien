@@ -84,8 +84,8 @@ final class PostbackProcessor
                 if (!Risk::checkBypassCheat($userId, $transId)) {
                     return 'banned_bypass_cheat';
                 }
-                // reward_pb is the VDN amount the member gets (already in VND).
-                $amountVnd = (int)floor((float)$rewardPb);
+                // reward_pb = số VND CUỐI cho member (đã bao gồm member share phía PubCrypto).
+                $amountVnd = Wallet::memberRewardVnd((float)$rewardPb);
                 $common['points'] = (float)$rewardPb;
                 $balance = Wallet::post($userId, Wallet::TYPE_TASK_REWARD, $amountVnd, $common);
                 Risk::checkPostback($userId, $amountVnd, $transId, (string)($p['country'] ?? ''));
@@ -97,7 +97,7 @@ final class PostbackProcessor
                     "SELECT amount_vnd FROM transactions WHERE trans_id = ? AND type = 'task_reward'",
                     [$transId]
                 );
-                $sub = $orig !== null ? (int)$orig['amount_vnd'] : Wallet::usdToVnd((float)$payoutPb);
+                $sub = $orig !== null ? (int)$orig['amount_vnd'] : Wallet::memberRewardVnd((float)$rewardPb);
                 if ($sub > 0) {
                     $common['trans_id'] = $transId . ':cb';
                     $common['note'] = 'chargeback of ' . $transId;

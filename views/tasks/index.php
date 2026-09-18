@@ -6,15 +6,17 @@
 <?php else: ?>
   <div class="task-grid">
   <?php foreach ($res['tasks'] as $t):
-    $rewardVnd = (int)floor($t["member_reward"]);
+    $memberVnd = (int)floor($t["member_reward"]);
+    $adminUsd = (float)($t["reward_usd"] ?? 0);
     $state = $t['cooldown_remaining'] > 0 ? 'cool' : ($t['available'] ? 'ok' : 'off');
     $remaining = max(0, $t['remaining_in_cycle']);
   ?>
     <div class="card task-card state-<?= $state ?>">
       <div class="task-top">
         <span class="task-name"><?= e($t['task_name']) ?></span>
-        <span class="reward"><?= vnd($rewardVnd) ?></span>
+        <span class="reward"><?= vnd($memberVnd) ?></span>
       </div>
+      <div class="task-sub muted">Giá gốc: $<?= number_format($adminUsd, 4) ?> · Bạn nhận: <?= vnd($memberVnd) ?></div>
       <div class="task-meta">
         <?php if ($state === 'cool'): ?>
           <span class="pill warn">⏳ Chờ <?= $t['cooldown_remaining'] ?>s</span>

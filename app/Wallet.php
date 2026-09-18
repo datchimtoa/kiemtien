@@ -24,6 +24,15 @@ final class Wallet
         return (int)floor($usd * $rate * $share / 100);
     }
 
+    /**
+     * Member reward = reward_pb từ postback PubCrypto (giá cuối cho member).
+     * reward_pb ĐÃ bao gồm member share của phía PubCrypto → không nhân share lần 2.
+     */
+    public static function memberRewardVnd(float $rewardPb): int
+    {
+        return (int)floor($rewardPb);
+    }
+
     /** Add/subtract balance + write ledger row. Returns new balance. */
     public static function post(
         int $userId,

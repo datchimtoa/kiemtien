@@ -19,12 +19,13 @@ final class Telegram
 {
     public static function botToken(): string
     {
-        return (string)(config('telegram.bot_token') ?? '');
+        // Ưu tiên env (Render: TELEGRAM_BOT_TOKEN), fallback config.php.
+        return (string)(getenv('TELEGRAM_BOT_TOKEN') ?: (config('telegram.bot_token') ?? ''));
     }
 
     public static function botUsername(): string
     {
-        return (string)(config('telegram.bot_username') ?? '');
+        return (string)(getenv('TELEGRAM_BOT_USERNAME') ?: (config('telegram.bot_username') ?? ''));
     }
 
     public static function enabled(): bool

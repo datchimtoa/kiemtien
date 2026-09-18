@@ -26,7 +26,7 @@ final class PostbackProcessor
         $signature = (string)($p['signature'] ?? '');
         $ip        = client_ip();
 
-        $secret = (string)Settings::get('pubcrypto_forward_secret', '');
+        $secret = (string)(config('pubcrypto.forward_secret') ?: Settings::get('pubcrypto_forward_secret', ''));
         $sigOk = false;
         if ($secret !== '' && $subId !== '' && $transId !== '') {
             $sigOk = hash_equals(strtolower($signature), strtolower(md5($subId . $transId . $rewardPb . $secret)));

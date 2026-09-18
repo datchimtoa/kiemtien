@@ -122,17 +122,33 @@ final class Auth
         return ['status' => 'ok'];
     }
 
+    /** Record IP visit — tương thích SQLite + MySQL + Postgres (upsert hits+1). */
+    public static function recordIpVisit(int $userId, string $ip): void
+    {
+        $now = now();
+        if (Database::isSqlite() || Database::isPgsql()) {
+            Database::run(
+                'INSERT INTO user_ips(user_id, ip, hits, first_seen, last_seen) VALUES(?,?,1,?,?)
+                 ON CONFLICT(user_id, ip) DO UPDATE SET hits = user_ips.hits + 1, last_seen = excluded.last_seen',
+                [$userId, $ip, $now, $now]
+            );
+        } else {
+            // MySQL: uq_user_ip(user_id, ip) → ON DUPLICATE KEY UPDATE.
+            Database::run(
+                'INSERT INTO user_ips(user_id, ip, hits, first_seen, last_seen) VALUES(?,?,1,?,?)
+                 ON DUPLICATE KEY UPDATE hits = hits + 1, last_seen = VALUES(last_seen)',
+                [$userId, $ip, $now, $now]
+            );
+        }
+    }
+
     /** Complete login after (optional) OTP verification. */
     public static function finishLogin(array $user, ?string $deviceId, ?string $fpHash): void
     {
         $userId = (int)$user['id'];
         $ip = client_ip();
         Database::run('UPDATE users SET last_login_at = ?, last_login_ip = ? WHERE id = ?', [now(), $ip, $userId]);
-        Database::run(
-            'INSERT INTO user_ips(user_id, ip, hits, first_seen, last_seen) VALUES(?,?,1,?,?)
-             ON CONFLICT(user_id, ip) DO UPDATE SET hits = hits + 1, last_seen = excluded.last_seen',
-            [$userId, $ip, now(), now()]
-        );
+        self::recordIpVisit($userId, $ip);
         if ($deviceId !== null && $deviceId !== '') {
             $row = Database::one('SELECT id FROM devices WHERE user_id = ? AND device_id = ?', [$userId, $deviceId]);
             if ($row === null) {

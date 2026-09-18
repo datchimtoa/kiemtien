@@ -1,9 +1,9 @@
 FROM php:8.3-cli
 
-# Install system deps
+# Install system deps + Postgres client libs
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl libonig-dev libxml2-dev libsqlite3-dev zip unzip \
-    && docker-php-ext-install pdo_sqlite pdo_mysql opcache \
+    curl libonig-dev libxml2-dev libsqlite3-dev libpq-dev zip unzip \
+    && docker-php-ext-install pdo_sqlite pdo_mysql pdo_pgsql opcache \
     && docker-php-ext-enable opcache \
     && rm -rf /var/lib/apt/lists/*
 

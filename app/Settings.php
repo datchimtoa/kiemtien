@@ -41,10 +41,12 @@ final class Settings
 
     public static function set(string $key, string $value): void
     {
-        Database::run(
-            'INSERT INTO settings(skey, svalue, updated_at) VALUES(?, ?, ?)
-             ON CONFLICT(skey) DO UPDATE SET svalue = excluded.svalue, updated_at = excluded.updated_at',
-            [$key, $value, now()]
+        // Upsert tương thích SQLite + MySQL (xem Database::upsert).
+        Database::upsert(
+            'settings',
+            ['skey' => $key, 'svalue' => $value, 'updated_at' => now()],
+            'skey',
+            ['svalue', 'updated_at']
         );
         if (self::$cache !== null) {
             self::$cache[$key] = $value;

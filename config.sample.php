@@ -6,10 +6,25 @@
  */
 
 // --- Database ---
-$db_driver = getenv('DB_DRIVER') ?: 'sqlite';
+// DB_DRIVER: sqlite (dev) | mysql (legacy) | pgsql (Neon cloud — KHUYÊN DÙNG production)
+// Neon: copy connection string từ dashboard → set DATABASE_URL, hoặc điền rời DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD.
+$db_driver = strtolower((string)(getenv('DB_DRIVER') ?: 'sqlite'));
 $db_config = [];
 
-if ($db_driver === 'mysql') {
+if ($db_driver === 'pgsql') {
+    $db_config = [
+        'driver' => 'pgsql',
+        'pgsql'  => [
+            'url'      => getenv('DATABASE_URL') ?: '',
+            'host'     => getenv('DB_HOST') ?: '',
+            'port'     => (int)(getenv('DB_PORT') ?: 5432),
+            'database' => getenv('DB_NAME') ?: 'neondb',
+            'username' => getenv('DB_USER') ?: '',
+            'password' => getenv('DB_PASSWORD') ?: '',
+            'sslmode'  => getenv('DB_SSLMODE') ?: 'require',
+        ],
+    ];
+} elseif ($db_driver === 'mysql') {
     $db_config = [
         'driver'   => 'mysql',
         'mysql'    => [
@@ -19,6 +34,9 @@ if ($db_driver === 'mysql') {
             'username' => getenv('DB_USER') ?: 'root',
             'password' => getenv('DB_PASSWORD') ?: '',
             'charset'  => 'utf8mb4',
+            // Cloud MySQL bắt buộc TLS: set DB_SSL=1 (+ DB_SSL_CA nếu nhà cung cấp cấp CA).
+            'ssl'      => filter_var(getenv('DB_SSL') ?: 'true', FILTER_VALIDATE_BOOLEAN),
+            'ssl_ca'   => getenv('DB_SSL_CA') ?: '',
         ],
     ];
 } else {
@@ -83,8 +101,11 @@ return [
     // Crypto API configs (set via environment)
     'pubcrypto' => [
         'api_base' => getenv('PUBCRYPTO_API_BASE') ?: 'https://pub.cryptolinkforearn.com',
+        // Site key + API key: ưu tiên env (Render), fallback DB settings (Admin → Cài đặt).
         'site_key' => getenv('PUBCRYPTO_SITE_KEY') ?: '',
         'api_key'  => getenv('PUBCRYPTO_API_KEY') ?: '',
+        // Forward secret: BẮT BUỘC để verify postback. Ưu tiên env, fallback DB.
+        'forward_secret' => getenv('PUBCRYPTO_FORWARD_SECRET') ?: '',
         'member_share_percent' => (int)(getenv('PUBCRYPTO_MEMBER_PERCENT') ?: 100),
     ],
     // Telegram API (for SMS verification via bot)

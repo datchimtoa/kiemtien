@@ -13,17 +13,33 @@ final class PubCryptoClient
 {
     public static function configured(): bool
     {
-        $sk = (string)Settings::get('pubcrypto_site_key', '');
-        $ak = (string)Settings::get('pubcrypto_api_key', '');
+        // Ưu tiên env (Render: PUBCRYPTO_SITE_KEY/API_KEY), fallback DB settings (Admin → Cài đặt).
+        $sk = (string)(config('pubcrypto.site_key') ?: Settings::get('pubcrypto_site_key', ''));
+        $ak = (string)(config('pubcrypto.api_key') ?: Settings::get('pubcrypto_api_key', ''));
         return $sk !== '' && $ak !== '';
+    }
+
+    private static function siteKey(): string
+    {
+        return (string)(config('pubcrypto.site_key') ?: Settings::get('pubcrypto_site_key', ''));
+    }
+
+    private static function apiKey(): string
+    {
+        return (string)(config('pubcrypto.api_key') ?: Settings::get('pubcrypto_api_key', ''));
+    }
+
+    private static function apiBase(): string
+    {
+        return rtrim((string)(config('pubcrypto.api_base') ?: Settings::get('pubcrypto_api_base', 'https://pub.cryptolinkforearn.com')), '/');
     }
 
     private static function request(string $method, string $path, array $query = [], ?array $body = null): array
     {
-        $base = rtrim((string)Settings::get('pubcrypto_api_base', 'https://pub.cryptolinkforearn.com'), '/');
+        $base = self::apiBase();
         $url = $base . $path . (empty($query) ? '' : '?' . http_build_query($query));
         $headers = [
-            'Authorization: Bearer ' . Settings::get('pubcrypto_api_key'),
+            'Authorization: Bearer ' . self::apiKey(),
             'Accept: application/json',
         ];
         if ($body !== null) {
@@ -60,7 +76,7 @@ final class PubCryptoClient
         if (!self::configured()) {
             return ['ok' => false, 'error' => 'Chưa cấu hình PubCrypto (site_key / api_key). Liên hệ quản trị viên.', 'http' => 0, 'tasks' => [], 'meta' => []];
         }
-        $siteKey = (string)Settings::get('pubcrypto_site_key');
+        $siteKey = self::siteKey();
         $subId = (string)$userId;
         $cacheKey = $siteKey . '|' . $subId; // quota/cooldown are per-member
         $ttl = max(10, Settings::getInt('pubcrypto_task_cache_ttl', 45));
@@ -86,10 +102,12 @@ final class PubCryptoClient
             };
             return ['ok' => false, 'error' => $httpError, 'http' => $res['http'], 'tasks' => [], 'meta' => []];
         }
-        Database::run(
-            'INSERT INTO task_cache(site_key, payload, fetched_at) VALUES(?,?,?)
-             ON CONFLICT(site_key) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at',
-            [$cacheKey, json_encode($res['data'], JSON_UNESCAPED_UNICODE), date('Y-m-d H:i:s', $now)]
+        // Cache kết quả API (upsert tương thích SQLite + MySQL).
+        Database::upsert(
+            'task_cache',
+            ['site_key' => $cacheKey, 'payload' => json_encode($res['data'], JSON_UNESCAPED_UNICODE), 'fetched_at' => date('Y-m-d H:i:s', $now)],
+            'site_key',
+            ['payload', 'fetched_at']
         );
         return self::shape($res['data'], false);
     }
@@ -133,7 +151,7 @@ final class PubCryptoClient
             return ['ok' => false, 'error' => 'not_configured'];
         }
         $res = self::request('POST', '/api/publisher/embed-tokens', [], [
-            'site_key' => Settings::get('pubcrypto_site_key'),
+            'site_key' => self::siteKey(),
             'sub_id'   => (string)$userId,
             'origin'   => $origin,
             'theme'    => $theme,

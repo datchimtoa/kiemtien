@@ -8,11 +8,14 @@ services:
     healthCheckPath: /
     envVars:
       - key: DB_DRIVER
-        value: sqlite
+        value: pgsql
       - key: SMS_DRIVER
         value: telegram
       - key: APP_ENV
         value: production
+      # DB Neon — điền 1 trong 2 cách (ưu tiên DATABASE_URL copy từ dashboard Neon):
+      - key: DATABASE_URL
+        sync: false
       # Secrets — Render sẽ hỏi giá trị khi tạo Blueprint (không lưu trong repo)
       - key: TELEGRAM_BOT_TOKEN
         sync: false
@@ -21,6 +24,10 @@ services:
       - key: PUBCRYPTO_SITE_KEY
         sync: false
       - key: PUBCRYPTO_API_KEY
+        sync: false
+      # Forward secret: BẮT BUỘC — dùng verify chữ ký postback md5(subId+transId+reward_pb+secret).
+      # Không có = mọi postback bị từ chối (signature_invalid), tiền KHÔNG vào ví.
+      - key: PUBCRYPTO_FORWARD_SECRET
         sync: false
       - key: POSTBACK_TOKEN
         sync: false

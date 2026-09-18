@@ -14,8 +14,37 @@ final class Schema
     public static function migrate(PDO $pdo): void
     {
         $sqlite = Database::isSqlite();
-        $pk = $sqlite ? 'INTEGER PRIMARY KEY AUTOINCREMENT' : 'BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT';
+        $pgsql = Database::isPgsql();
+        // Postgres: BIGSERIAL PK, TEXT thay TEXT(n), VARCHAR thay TEXT(n).
+        $pk = $sqlite ? 'INTEGER PRIMARY KEY AUTOINCREMENT'
+            : ($pgsql ? 'BIGSERIAL PRIMARY KEY'
+            : 'BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT');
         $text = static fn(int $n = 255) => $sqlite ? "TEXT($n)" : "VARCHAR($n)";
+        // MySQL/Postgres: CREATE INDEX IF NOT EXISTS không tồn tại → tạo index có kiểm tra trùng.
+        // $idx('name ON table(cols[, UNIQUE])') tương thích cả 2 driver.
+        $idx = static function (string $name, string $table, string $cols, bool $unique = false) use ($pdo, $sqlite, $pgsql): void {
+            if ($sqlite) {
+                $pdo->exec(($unique ? 'CREATE UNIQUE INDEX IF NOT EXISTS ' : 'CREATE INDEX IF NOT EXISTS ') . "{$name} ON {$table}({$cols})");
+                return;
+            }
+            if ($pgsql) {
+                // Postgres: pg_indexes, CREATE INDEX IF NOT EXISTS ĐÃ có sẵn từ v9.5.
+                $pdo->exec(($unique ? 'CREATE UNIQUE INDEX IF NOT EXISTS ' : 'CREATE INDEX IF NOT EXISTS ') . "{$name} ON {$table}({$cols})");
+                return;
+            }
+            // MySQL: kiểm tra index đã tồn tại chưa rồi mới tạo (tránh lỗi 1061 khi migrate lại).
+            try {
+                $exists = Database::value(
+                    'SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?',
+                    [$table, $name]
+                );
+                if ((int)$exists === 0) {
+                    $pdo->exec(($unique ? 'CREATE UNIQUE INDEX ' : 'CREATE INDEX ') . "{$name} ON {$table}({$cols})");
+                }
+            } catch (\Throwable $e) {
+                // Index có thể đã tồn tại do race → bỏ qua.
+            }
+        };
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS settings (
             skey {$text(100)} PRIMARY KEY,
@@ -43,8 +72,8 @@ final class Schema
             created_at {$text(32)} NOT NULL,
             updated_at {$text(32)}
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_users_fp ON users(register_fp)');
+        $idx('idx_users_status', 'users', 'status');
+        $idx('idx_users_fp', 'users', 'register_fp');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS otp_codes (
             id {$pk},
@@ -57,7 +86,7 @@ final class Schema
             consumed_at {$text(32)},
             created_at {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone, purpose)');
+        $idx('idx_otp_phone', 'otp_codes', 'phone, purpose');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS auth_events (
             id {$pk},
@@ -71,7 +100,7 @@ final class Schema
             detail {$text(500)} DEFAULT '',
             created_at {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_auth_events_user ON auth_events(user_id)');
+        $idx('idx_auth_events_user', 'auth_events', 'user_id');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS devices (
             id {$pk},
@@ -85,9 +114,9 @@ final class Schema
             last_seen {$text(32)} NOT NULL,
             trusted INTEGER NOT NULL DEFAULT 0
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id)');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_devices_fp ON devices(fp_hash)');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_devices_ip ON devices(ip)');
+        $idx('idx_devices_user', 'devices', 'user_id');
+        $idx('idx_devices_fp', 'devices', 'fp_hash');
+        $idx('idx_devices_ip', 'devices', 'ip');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS user_ips (
             id {$pk},
@@ -97,13 +126,31 @@ final class Schema
             first_seen {$text(32)} NOT NULL,
             last_seen {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS uq_user_ip ON user_ips(user_id, ip)');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_user_ips_ip ON user_ips(ip)');
+        $idx('uq_user_ip', 'user_ips', 'user_id, ip', true);
+        $idx('idx_user_ips_ip', 'user_ips', 'ip');
         self::migratePart2($pdo, $pk, $text);
     }
 
     private static function migratePart2(PDO $pdo, string $pk, \Closure $text): void
     {
+        $sqlite = Database::isSqlite();
+        $pgsql = Database::isPgsql();
+        $idx = static function (string $name, string $table, string $cols, bool $unique = false) use ($pdo, $sqlite, $pgsql): void {
+            if ($sqlite || $pgsql) {
+                $pdo->exec(($unique ? 'CREATE UNIQUE INDEX IF NOT EXISTS ' : 'CREATE INDEX IF NOT EXISTS ') . "{$name} ON {$table}({$cols})");
+                return;
+            }
+            try {
+                $exists = Database::value(
+                    'SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?',
+                    [$table, $name]
+                );
+                if ((int)$exists === 0) {
+                    $pdo->exec(($unique ? 'CREATE UNIQUE INDEX ' : 'CREATE INDEX ') . "{$name} ON {$table}({$cols})");
+                }
+            } catch (\Throwable $e) {
+            }
+        };
         $pdo->exec("CREATE TABLE IF NOT EXISTS transactions (
             id {$pk},
             user_id INTEGER NOT NULL,
@@ -124,9 +171,16 @@ final class Schema
             raw_json TEXT,
             created_at {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id)');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_tx_trans ON transactions(trans_id)');
-        $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_tx_trans_id ON transactions(trans_id) WHERE trans_id <> ''");
+        $idx('idx_tx_user', 'transactions', 'user_id');
+        $idx('idx_tx_trans', 'transactions', 'trans_id');
+        // Chống trùng transId trên cả 2 driver. SQLite hỗ trợ partial index (WHERE ...);
+        // MySQL KHÔNG hỗ trợ → đổi chiến lược: trans_id rỗng lưu NULL, UNIQUE(trans_id)
+        // (MySQL cho phép nhiều NULL trong UNIQUE; SQLite cũng vậy). Xem Wallet::post().
+        if ($sqlite) {
+            $pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_tx_trans_id ON transactions(trans_id) WHERE trans_id IS NOT NULL");
+        } else {
+            $idx('uq_tx_trans_id', 'transactions', 'trans_id', true);
+        }
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS withdrawals (
             id {$pk},
@@ -145,8 +199,8 @@ final class Schema
             processed_at {$text(32)},
             created_at {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_wd_user ON withdrawals(user_id)');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_wd_status ON withdrawals(status)');
+        $idx('idx_wd_user', 'withdrawals', 'user_id');
+        $idx('idx_wd_status', 'withdrawals', 'status');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS admin_users (
             id {$pk},
@@ -178,7 +232,7 @@ final class Schema
             ip {$text(64)} DEFAULT '',
             created_at {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_risk_user ON risk_events(user_id)');
+        $idx('idx_risk_user', 'risk_events', 'user_id');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS postback_logs (
             id {$pk},
@@ -193,7 +247,7 @@ final class Schema
             raw TEXT,
             created_at {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_pbl_trans ON postback_logs(trans_id)');
+        $idx('idx_pbl_trans', 'postback_logs', 'trans_id');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS task_cache (
             site_key {$text(128)} PRIMARY KEY,
@@ -209,7 +263,7 @@ final class Schema
             ip {$text(64)} DEFAULT '',
             created_at {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_clicks_user_time ON task_clicks(user_id, created_at)');
+        $idx('idx_clicks_user_time', 'task_clicks', 'user_id, created_at');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS rate_buckets (
             bucket {$text(160)} PRIMARY KEY,
@@ -228,7 +282,7 @@ final class Schema
             ua {$text(300)} DEFAULT '',
             created_at {$text(32)} NOT NULL
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_fp_hash ON fingerprints(fp_hash)');
+        $idx('idx_fp_hash', 'fingerprints', 'fp_hash');
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_verify (
             id {$pk},
@@ -243,7 +297,15 @@ final class Schema
             expires_at {$text(32)} NOT NULL,
             verified_at {$text(32)}
         )");
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_tgv_phone ON telegram_verify(phone)');
+        $idx('idx_tgv_phone', 'telegram_verify', 'phone');
+
+        // Partial unique cho dedupe transId: SQLite + Postgres hỗ trợ WHERE,
+        // MySQL không → dùng UNIQUE thường (Wallet::post lưu NULL khi rỗng).
+        if ($sqlite || $pgsql) {
+            $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS uq_tx_trans_id ON transactions(trans_id) WHERE trans_id IS NOT NULL');
+        } else {
+            $idx('uq_tx_trans_id', 'transactions', 'trans_id', true);
+        }
 
         self::migrateColumns($pdo);
         self::migrateDefaults($pdo);
@@ -252,14 +314,39 @@ final class Schema
     /** Add columns that were introduced after the first release. */
     private static function migrateColumns(PDO $pdo): void
     {
-        $add = static function (string $table, string $column, string $definition) use ($pdo): void {
-            $cols = Database::all("PRAGMA table_info({$table})");
-            foreach ($cols as $c) {
-                if (($c['name'] ?? '') === $column) {
-                    return;
+        $sqlite = Database::isSqlite();
+        $pgsql = Database::isPgsql();
+        // Kiểu cột mới cho Postgres: TEXT(n) → TEXT, TEXT(32) → VARCHAR(32).
+        $pgdef = static fn(string $def): string => preg_replace('/\bTEXT\((\d+)\)/i', 'VARCHAR($1)', $def) ?? $def;
+        $add = static function (string $table, string $column, string $definition) use ($pdo, $sqlite, $pgsql, $pgdef): void {
+            if ($sqlite) {
+                $cols = Database::all("PRAGMA table_info({$table})");
+                foreach ($cols as $c) {
+                    if (($c['name'] ?? '') === $column) {
+                        return;
+                    }
                 }
+                $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+                return;
             }
-            $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+            if ($pgsql) {
+                $exists = Database::value(
+                    'SELECT COUNT(*) FROM information_schema.columns WHERE table_name = ? AND column_name = ?',
+                    [$table, $column]
+                );
+                if ((int)$exists === 0) {
+                    $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} " . $pgdef($definition));
+                }
+                return;
+            }
+            // MySQL: kiểm tra qua information_schema (TABLE_SCHEMA = DATABASE()).
+            $exists = Database::value(
+                'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                [$table, $column]
+            );
+            if ((int)$exists === 0) {
+                $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+            }
         };
         $add('users', 'telegram_user_id', "TEXT(32) DEFAULT ''");
         $add('users', 'telegram_username', "TEXT(64) DEFAULT ''");
@@ -318,10 +405,24 @@ final class Schema
             'usd_rate_auto'        => '1',
             'usd_rate_updated_at'  => '',
         ];
-        $st = $pdo->prepare("INSERT OR IGNORE INTO settings(skey, svalue, updated_at) VALUES(?, ?, ?)");
+        // "INSERT OR IGNORE" là cú pháp SQLite. MySQL: INSERT IGNORE; Postgres: ON CONFLICT DO NOTHING.
         $now = now();
+        $isPgsql = Database::isPgsql();
         foreach ($defaults as $k => $v) {
-            $st->execute([$k, $v, $now]);
+            try {
+                if (Database::isSqlite()) {
+                    $pdo->prepare('INSERT OR IGNORE INTO settings(skey, svalue, updated_at) VALUES(?, ?, ?)')
+                        ->execute([$k, $v, $now]);
+                } elseif ($isPgsql) {
+                    $pdo->prepare('INSERT INTO settings(skey, svalue, updated_at) VALUES(?, ?, ?) ON CONFLICT(skey) DO NOTHING')
+                        ->execute([$k, $v, $now]);
+                } else {
+                    $pdo->prepare('INSERT IGNORE INTO settings(skey, svalue, updated_at) VALUES(?, ?, ?)')
+                        ->execute([$k, $v, $now]);
+                }
+            } catch (\Throwable $e) {
+                // Đã tồn tại hoặc lỗi seed → bỏ qua, giữ giá trị hiện có.
+            }
         }
     }
 }

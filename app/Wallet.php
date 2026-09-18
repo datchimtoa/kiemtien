@@ -59,6 +59,9 @@ final class Wallet
             $newPoints = (float)$row['points_total'] + max(0, $pointsDelta);
 
             $transId = (string)($meta['trans_id'] ?? '');
+            // trans_id: NULL khi rỗng → UNIQUE(trans_id) chỉ chặn trùng transId thật
+            // (tương thích cả SQLite partial index lẫn MySQL UNIQUE cho phép nhiều NULL).
+            $transIdDb = $transId !== '' ? $transId : null;
             if ($transId !== '') {
                 $dupe = Database::one('SELECT id FROM transactions WHERE trans_id = ?', [$transId]);
                 if ($dupe !== null) {
@@ -76,7 +79,7 @@ final class Wallet
                 'INSERT INTO transactions(user_id, type, amount_vnd, points, balance_after, trans_id, source, status_raw, offer_name, offer_type, payout_usd, reward_pb, country, ip, note, raw_json, created_at)
                  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                 [
-                    $userId, $type, $amountVnd, $pointsDelta, $newBalance, $transId,
+                    $userId, $type, $amountVnd, $pointsDelta, $newBalance, $transIdDb,
                     (string)($meta['source'] ?? ''),
                     isset($meta['status_raw']) ? (int)$meta['status_raw'] : null,
                     (string)($meta['offer_name'] ?? ''), (string)($meta['offer_type'] ?? ''),

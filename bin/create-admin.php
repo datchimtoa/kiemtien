@@ -14,9 +14,11 @@ if (strlen($password) < 10) {
 }
 App\Database::migrate();
 $hash = hash_password($password);
-App\Database::run(
-    'INSERT INTO admin_users(username, password_hash, status, created_at) VALUES(?,?,?,?)
-     ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash',
-    [$username, $hash, 'active', now()]
+// Upsert tương thích SQLite + MySQL.
+App\Database::upsert(
+    'admin_users',
+    ['username' => $username, 'password_hash' => $hash, 'status' => 'active', 'created_at' => now()],
+    'username',
+    ['password_hash']
 );
 echo "Admin '{$username}' created/updated.\n";

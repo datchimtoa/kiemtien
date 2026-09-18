@@ -1,0 +1,19 @@
+# === BẮT BUỘC: KHÔNG COMMIT CÁC FILE NÀY ===
+
+# Database + sessions + logs (chứa dữ liệu thật, password, token)
+storage/
+
+# Cấu hình chứa secret — never commit
+config.php
+
+# Web server rewrite (không bắt buộc, thường không cần)
+.htaccess
+
+# Editor / OS artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

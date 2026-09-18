@@ -5,23 +5,28 @@
   <?php endforeach; ?>
 </div>
 <table>
-<thead><tr><th>#</th><th>SĐT</th><th>Số tiền</th><th>Phí</th><th>PT</th><th>Người nhận</th><th>STK</th><th>Bank</th><th>Uy tín</th><th>High score</th><th>Trạng thái</th><th>Thời gian</th><th>Xử lý</th></tr></thead>
+<thead><tr><th>#</th><th>SĐT</th><th>Số tiền</th><th>PT</th><th>Người nhận</th><th>STK</th><th>Uy tín</th><th>High score</th><th>Tuổi TK</th><th>IP version</th><th>Thiết bị</th><th>Trạng thái</th><th>Thời gian</th><th>Xử lý</th></tr></thead>
 <tbody>
 <?php foreach ($rows as $w): ?>
 <tr>
   <td><?= (int)$w['id'] ?></td>
   <td><?= e(display_phone($w['phone'])) ?></td>
   <td><b><?= vnd((int)$w['amount_vnd']) ?></b></td>
-  <td><?= vnd((int)$w['fee_vnd']) ?></td>
-  <td><?= e($w['method']) ?></td>
+  <td><?= App\Withdrawals::methodLabel((string)$w['method']) ?></td>
   <td><?= e($w['account_name']) ?></td>
-  <td><?= e($w['account_number']) ?></td>
-  <td><?= e($w['bank_name'] ?: '—') ?></td>
+  <td><code><?= e($w['account_number']) ?></code></td>
   <td>
-     <span class="score-mini"><?= (int)$w['trust_score'] ?></span>
-     <span class="muted">/ <?= vnd((int)$w['high_score']) ?></span>
-     <br><span class="pill <?= e($w['status']) ?>"><?= e($w['status']) ?></span>
-   </td>
+    <div class="score-bar small"><div class="score-fill" style="width:<?= (int)$w['trust_score'] ?>%"></div><span class="score-val"><?= (int)$w['trust_score'] ?></span></div>
+    <div class="hint small">Earned: <?= vnd((int)$w['total_earned']) ?> · Tasks: <?= (int)$w['tasks_done'] ?> · Bal: <?= vnd((int)$w['user_balance']) ?></div>
+  </td>
+  <td><b class="hl"><?= vnd((int)$w['high_score']) ?></b></td>
+  <td><?= (int)$w['account_age_days'] ?>d</td>
+  <td><span class="pill"><?= e($w['user_ip_version']) ?></span> <code class="small"><?= e($w['register_ip']) ?></code></td>
+  <td><code><?= e($w['register_device_id'] ? substr($w['register_device_id'], 0, 12) : '—') ?></code></td>
+  <td>
+    <span class="pill <?= $w['status'] === 'completed' ? 'ok' : ($w['status'] === 'pending' ? 'pending' : 'warn') ?>"><?= ucfirst($w['status']) ?></span>
+    <?php if ($w['telegram_user_id']): ?><span class="pill ok" title="Đã xác minh">✓ TG</span><?php endif; ?>
+  </td>
   <td><?= e($w['created_at']) ?></td>
   <td>
     <?php if ($w['status'] === 'pending'): ?>

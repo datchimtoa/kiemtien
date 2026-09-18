@@ -148,8 +148,112 @@ final class Risk
                 $score -= min(30, $othersFp * 15);
             }
         }
-        return max(0, min(100, $score));
+                return max(0, min(100, $score));
     }
+
+    /**
+     * Comprehensive user stats for admin inspection.
+     * Returns all risk/earnings/activity data admin needs to check legitimacy.
+     */
+    public static function userStats(int $userId): array
+    {
+        $user = Database::one('SELECT * FROM users WHERE id = ?', [$userId]);
+        if ($user === null) {
+            return [];
+        }
+        $ageDays = (int)((time() - strtotime((string)$user['created_at'])) / 86400);
+        $tasksDone = (int)(Database::value(
+            "SELECT COUNT(*) FROM transactions WHERE user_id = ? AND type = 'task_reward' AND amount_vnd > 0",
+            [$userId]
+        ) ?? 0);
+        $totalEarned = (int)(Database::value(
+            "SELECT COALESCE(SUM(amount_vnd),0) FROM transactions WHERE user_id = ? AND type = 'task_reward' AND amount_vnd > 0",
+            [$userId]
+        ) ?? 0);
+        $chargebacks = (int)(Database::value(
+            "SELECT COUNT(*) FROM transactions WHERE user_id = ? AND type = 'task_chargeback'",
+            [$userId]
+        ) ?? 0);
+        $highEvents = (int)(Database::value(
+            "SELECT COUNT(*) FROM risk_events WHERE user_id = ? AND severity = 'high'",
+            [$userId]
+        ) ?? 0);
+        $medEvents = (int)(Database::value(
+            "SELECT COUNT(*) FROM risk_events WHERE user_id = ? AND severity = 'medium'",
+            [$userId]
+        ) ?? 0);
+
+        // Devices
+        $devices = Database::all('SELECT * FROM devices WHERE user_id = ? ORDER BY last_seen DESC', [$userId]);
+        // IP history
+        $ips = Database::all('SELECT * FROM user_ips WHERE user_id = ? ORDER BY last_seen DESC', [$userId]);
+        // Risk events
+        $riskEvents = Database::all(
+            'SELECT * FROM risk_events WHERE user_id = ? ORDER BY id DESC LIMIT 50',
+            [$userId]
+        );
+        // Transaction summary
+        $txSummary = Database::all(
+            "SELECT type, COUNT(*) AS cnt, COALESCE(SUM(amount_vnd),0) AS sum FROM transactions WHERE user_id = ? GROUP BY type",
+            [$userId]
+        );
+        // Withdrawal summary
+        $wdSummary = Database::all(
+            "SELECT status, COUNT(*) AS cnt, COALESCE(SUM(amount_vnd),0) AS sum FROM withdrawals WHERE user_id = ? GROUP BY status",
+            [$userId]
+        );
+
+        return [
+            'user'         => $user,
+            'age_days'     => $ageDays,
+            'ip_version'   => $user['register_ip'] !== '' ? ip_version((string)$user['register_ip']) : '—',
+            'trust_score'  => self::trustScore($userId),
+            'high_score'   => self::highScore($userId),
+            'tasks_done'   => $tasksDone,
+            'total_earned' => $totalEarned,
+            'chargebacks'  => $chargebacks,
+            'high_events'  => $highEvents,
+            'med_events'   => $medEvents,
+            'devices'      => $devices,
+            'ips'          => $ips,
+            'risk_events'  => $riskEvents,
+            'tx_summary'   => $txSummary,
+            'wd_summary'   => $wdSummary,
+            'telegram'     => [
+                'user_id'    => $user['telegram_user_id'] ?? null,
+                'username'   => $user['telegram_username'] ?? null,
+                'verified_at' => $user['telegram_verified_at'] ?? null,
+            ],
+        ];
+    }
+
+    /** Hard delete a user + ALL related data. For confirmed cheaters. */
+    public static function deleteUser(int $userId): bool
+    {
+        Database::begin();
+        try {
+            $tables = [
+                'transactions', 'withdrawals', 'user_ips', 'devices',
+                'fingerprints', 'risk_events', 'audit_log', 'otp_codes',
+            ];
+            foreach ($tables as $t) {
+                Database::run("DELETE FROM {$t} WHERE user_id = ?", [$userId]);
+            }
+            // Remove task_clicks
+            Database::run('DELETE FROM task_clicks WHERE user_id = ?', [$userId]);
+            // Remove telegram_verify for this user's phone
+            Database::run('DELETE FROM telegram_verify WHERE phone = (SELECT phone FROM users WHERE id = ?)', [$userId]);
+            // Remove the user
+            Database::run('DELETE FROM users WHERE id = ?', [$userId]);
+            Database::commit();
+            return true;
+        } catch (\Throwable $e) {
+            Database::rollback();
+            error_log('[risk] deleteUser failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
 
     /** High score = lifetime task earnings in VND. */
     public static function highScore(int $userId): int

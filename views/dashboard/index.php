@@ -8,9 +8,14 @@
   </div>
 </div>
 <div class="grid3">
+  <div class="card"><h3>Uy tín</h3><div class="score-bar"><div class="score-fill" style="width:<?= (int)$trustScore ?>%"></div><span class="score-val"><?= (int)$trustScore ?>/100</span></div></div>
+  <div class="card"><h3>High Score</h3><p class="big hl"><?= vnd((int)$highScore) ?></p></div>
+  <div class="card"><h3>Tỉ giá hiện tại</h3><p class="big"><?= number_format((int)($rateInfo['rate'] ?? 26000), 0, ',', '.') ?>₫</p><span class="muted small">1 USD · member <?= (int)($rateInfo['member_share'] ?? 100) ?>%</span></div>
+</div>
+<div class="grid3">
   <div class="card"><h3>Tổng thu nhiệm vụ</h3><p class="big"><?= vnd($sumTasks) ?></p></div>
   <div class="card"><h3>Nhiệm vụ hoàn thành</h3><p class="big"><?= $countTasks ?></p></div>
-  <div class="card"><h3>Yêu cầu rút</h3><p class="big"><?= $pendingWd ? vnd((int)$pendingWd['amount_vnd']) . ' (đang chờ)' : 'Không có' ?></p></div>
+  <div class="card"><h3>Yêu cầu rút</h3><p class="big"><?= $pendingWd ? vnd((int)$pendingWd['amount_vnd']) . ' (chờ)' : 'Không có' ?></p></div>
 </div>
 <div class="card">
   <h3>Giao dịch gần đây</h3>

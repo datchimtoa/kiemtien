@@ -54,6 +54,14 @@ nav{gap:2px}nav a{padding:8px 12px;border-radius:9px;transition:background .15s,
 .table-wrap{overflow-x:auto}
 h3{margin-top:0}
 .hint{color:var(--muted);font-size:.85rem}
+.score-bar{position:relative;height:18px;background:var(--line);border-radius:10px;overflow:hidden;margin:3px 0}
+.score-bar.small{height:14px}
+.score-fill{height:100%;background:linear-gradient(90deg,#10b981,#22c55e);border-radius:10px;transition:width .3s}
+.score-val{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;font-weight:700}
+.score-mini{display:inline-block;padding:3px 10px;background:var(--line);border-radius:999px;font-size:.78rem;font-weight:700}
+.pill.small{font-size:.65rem;padding:2px 8px}
+.hint.small{font-size:.75rem}
+
 
 /* Task cards */
 .page-head{display:flex;flex-direction:column;gap:4px;margin:6px 0 18px}

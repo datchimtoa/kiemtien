@@ -1,4 +1,16 @@
 <div class="card">
+  <h3>📈 Tỉ giá &amp; Thời gian uptime</h3>
+  <table class="kv">
+    <tr><th>Tỉ giá USD→VND hiện tại</th><td><b class="hl"><?= number_format($rateInfo['rate'], 0, ',', '.') ?>₫</b></td></tr>
+    <tr><th>Cập nhật lúc</th><td><?= e($rateInfo['updated_at'] ?: 'Chưa có') ?></td></tr>
+    <tr><th>Chế độ</th><td><?= $rateInfo['auto'] ? '<span class="pill ok">Tự động (mỗi 6h)</span>' : '<span class="pill warn">Thủ công</span>' ?></td></tr>
+    <tr><th>% chia cho member</th><td><?= (int)$rateInfo['member_share'] ?>%</td></tr>
+  </table>
+  <p class="hint">Tỉ giá tự động cập nhật từ open.er-api.com mỗi 6 giờ khi bật chế độ tự động. Khi thay đổi % chia cho member, điểm số sẽ tự động cập nhật theo.</p>
+  <p class="hint">Ví dụ: 1 USD = <?= number_format($rateInfo['rate'], 0, ',', '.') ?>₫ → nếu member được <?= (int)$rateInfo['member_share'] ?>%, với nhiệm vụ trị giá $0.08 → member nhận <?= vnd((int)floor(0.08 * $rateInfo['rate'] * $rateInfo['member_share'] / 100)) ?>.</p>
+</div>
+
+<div class="card">
   <h3>PubCrypto Postback URL (paste vào PubCrypto Dashboard)</h3>
   <p><code class="copybox"><?= e($postbackUrl) ?></code></p>
 </div>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Database;
+use App\RateUpdater;
 use App\Risk;
 use App\Session;
 use App\Settings;
@@ -29,15 +30,22 @@ final class DashboardController
             "SELECT COUNT(*) FROM transactions WHERE user_id = ? AND type = 'task_reward'",
             [(int)$user['id']]
         ) ?? 0);
+        $pendingWd = Database::one(
+            "SELECT id, amount_vnd, created_at FROM withdrawals WHERE user_id = ? AND status IN ('pending','processing') ORDER BY id DESC LIMIT 1",
+            [(int)$user['id']]
+        );
+        $trust = Risk::trustScore((int)$user['id']);
+        $high = Risk::highScore((int)$user['id']);
+        $rate = RateUpdater::currentRate();
         View::show('dashboard/index', [
-            'user'        => $user,
-            'tx'          => $tx,
-            'sumTasks'    => $sumTasks,
-            'countTasks'  => $countTasks,
-            'pendingWd'   => Database::one(
-                "SELECT id, amount_vnd, created_at FROM withdrawals WHERE user_id = ? AND status IN ('pending','processing') ORDER BY id DESC LIMIT 1",
-                [(int)$user['id']]
-            ),
+            'user'       => $user,
+            'tx'         => $tx,
+            'sumTasks'   => $sumTasks,
+            'countTasks' => $countTasks,
+            'pendingWd'  => $pendingWd,
+            'trustScore' => $trust,
+            'highScore'  => $high,
+            'rateInfo'   => $rate,
         ], 'member');
     }
 

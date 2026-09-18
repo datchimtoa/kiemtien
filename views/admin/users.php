@@ -9,7 +9,7 @@
 <tbody>
 <?php foreach ($rows as $u): ?>
 <tr>
-  <td><?= (int)$u['id'] ?></td>
+  <td><a href="/admin/users/<?= (int)$u['id'] ?>"><?=(int)$u['id']?></a></td>
   <td><?= e(display_phone($u['phone'])) ?></td>
   <td><?= e($u['full_name'] ?: '—') ?></td>
   <td><?= vnd((int)$u['balance_vnd']) ?></td>

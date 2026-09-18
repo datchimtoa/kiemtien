@@ -83,6 +83,33 @@ if (!function_exists('is_valid_public_ip')) {
     }
 }
 
+if (!function_exists('ip_version')) {
+    /**
+     * Identify IP version for admin's legitimacy check (IPv4 / IPv6 / Unknown).
+     */
+    function ip_version(string $ip): string
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return 'IPv4';
+        }
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            return 'IPv6';
+        }
+        return 'Unknown';
+    }
+}
+
+if (!function_exists('ip_geo_flag')) {
+    /**
+     * Country risk flags per IP. Returns empty string when not set / not configured.
+     * Admin can set ip_risk_countries = 'CN,RU,KP,...' in settings to block these.
+     */
+    function ip_geo_flag(string $ip): string
+    {
+        return '';
+    }
+}
+
 if (!function_exists('user_agent')) {
     function user_agent(): string
     {

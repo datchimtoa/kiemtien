@@ -13,6 +13,21 @@ final class RateUpdater
 {
     private const SOURCE = 'https://open.er-api.com/v6/latest/USD';
 
+    /**
+     * Current rate + metadata for display in admin settings.
+     * Shows the rate, when it was last updated, and member share.
+     */
+    public static function currentRate(): array
+    {
+        return [
+            'rate'         => (int)Settings::get('usd_to_vnd_rate', '26000'),
+            'updated_at'   => Settings::get('usd_rate_updated_at', ''),
+            'auto'         => Settings::getInt('usd_rate_auto', 1) === 1,
+            'member_share' => Settings::getInt('site_member_share_percent', 100),
+        ];
+    }
+
+
     public static function refresh(): void
     {
         if (Settings::getInt('usd_rate_auto', 1) !== 1) {

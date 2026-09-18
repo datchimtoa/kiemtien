@@ -123,6 +123,9 @@ if ($handled !== null) {
 if (preg_match('#^/admin/users/(\d+)/(\w+)$#', $path, $m) && $method === 'POST') {
     AdminController::userAction((int)$m[1], $m[2]);
 }
+if (preg_match('#^/admin/users/(\d+)$#', $path, $m) && $method === 'GET') {
+    AdminController::userView((int)$m[1]);
+}
 if (preg_match('#^/admin/withdrawals/(\d+)/(\w+)$#', $path, $m) && $method === 'POST') {
     AdminController::withdrawAction((int)$m[1], $m[2]);
 }

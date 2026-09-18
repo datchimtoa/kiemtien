@@ -278,8 +278,10 @@ final class Schema
             'pubcrypto_forward_secret' => '',
             'pubcrypto_api_base'   => 'https://pub.cryptolinkforearn.com',
             'pubcrypto_task_cache_ttl' => '45',
-            // Economy
+                        // Economy
             'usd_to_vnd_rate'      => '26000',
+            'usd_rate_auto'        => '1',
+            'usd_rate_updated_at'  => '',
             'site_member_share_percent' => '100',
             'min_withdraw_vnd'     => '10000',
             'max_withdraw_vnd'     => '5000000',

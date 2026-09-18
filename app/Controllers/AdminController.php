@@ -7,6 +7,8 @@ use App\AdminAuth;
 use App\Audit;
 use App\Csrf;
 use App\Database;
+use App\RateUpdater;
+use App\Risk;
 use App\Session;
 use App\View;
 use App\Wallet;
@@ -111,10 +113,31 @@ final class AdminController
                     Session::flash('success', 'Đã điều chỉnh số dư.');
                 }
                 break;
+                        case 'hard_delete':
+                if (Risk::deleteUser($userId)) {
+                    Audit::log('admin', AdminAuth::id() ?? 0, 'user_hard_deleted', 'users/' . $userId, []);
+                    Session::flash('success', 'Đã xóa vĩnh viễn tài khoản và toàn bộ dữ liệu liên quan.');
+                } else {
+                    Session::flash('error', 'Xóa tài khoản thất bại. Vui lòng thử lại.');
+                }
+                break;
             default:
                 Session::flash('error', 'Hành động không hợp lệ.');
         }
         redirect('/admin/users');
+    }
+
+    /** User detail page: full profile with IPs, devices, risk events, telegram, transactions */
+    public static function userView(int $userId): void
+    {
+        AdminAuth::require();
+        $user = Database::one('SELECT * FROM users WHERE id = ?', [$userId]);
+        if ($user === null) {
+            Session::flash('error', 'Không tìm thấy người dùng.');
+            redirect('/admin/users');
+        }
+        $stats = Risk::userStats($userId);
+                View::show('admin/user_detail', ['user' => $user, 'stats' => $stats], 'admin');
     }
 
     public static function withdrawals(): void
@@ -124,9 +147,21 @@ final class AdminController
         $where = $status !== '' ? 'WHERE w.status = ?' : '';
         $params = $status !== '' ? [$status] : [];
         $rows = Database::all(
-            "SELECT w.*, u.phone, u.balance_vnd FROM withdrawals w JOIN users u ON u.id = w.user_id {$where} ORDER BY (w.status = 'pending') DESC, w.id DESC LIMIT 100",
+            "SELECT w.*, u.phone, u.balance_vnd, u.register_ip, u.register_device_id,
+                    u.last_login_ip, u.telegram_user_id, u.telegram_username, u.created_at AS user_created,
+                    u.points_total,
+                    COALESCE((SELECT SUM(amount_vnd) FROM transactions WHERE user_id = u.id AND type = 'task_reward' AND amount_vnd > 0),0) AS total_earned,
+                    COALESCE((SELECT COUNT(*) FROM transactions WHERE user_id = u.id AND type = 'task_reward' AND amount_vnd > 0),0) AS tasks_done,
+                    COALESCE((SELECT COUNT(*) FROM withdrawals WHERE user_id = u.id AND status = 'completed'),0) AS wd_count
+             FROM withdrawals w JOIN users u ON u.id = w.user_id {$where} ORDER BY (w.status = 'pending') DESC, w.id DESC LIMIT 100",
             $params
         );
+        foreach ($rows as &$r) {
+            $r['trust_score'] = Risk::trustScore((int)$r['user_id']);
+            $r['high_score'] = Risk::highScore((int)$r['user_id']);
+            $r['user_ip_version'] = ip_version((string)$r['register_ip']);
+            $r['account_age_days'] = (int)((time() - strtotime((string)$r['user_created'])) / 86400);
+        }
         View::show('admin/withdrawals', ['rows' => $rows, 'status' => $status], 'admin');
     }
 
@@ -184,12 +219,14 @@ final class AdminController
         View::show('admin/audit', ['rows' => $rows], 'admin');
     }
 
-    public static function settings(): void
+        public static function settings(): void
     {
         AdminAuth::require();
+        $rate = RateUpdater::currentRate();
         View::show('admin/settings', [
-            'settings' => Settings::all(),
-            'postbackUrl' => \App\PostbackProcessor::url(),
+            'settings'     => Settings::all(),
+            'postbackUrl'  => \App\PostbackProcessor::url(),
+            'rateInfo'     => $rate,
         ], 'admin');
     }
 

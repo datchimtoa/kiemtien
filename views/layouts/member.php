@@ -25,7 +25,7 @@
 <?php endforeach; ?>
 <?= $content ?>
 </main>
-<footer class="footer">© <?= date('Y') ?> EarnMoney.VIP — Kiếm tiền mỗi ngày. Tỷ giá: 1 USD ≈ <?= vnd((int)\App\Settings::get('usd_to_vnd_rate', '26000')) ?></footer>
+<footer class="footer">© <?= date('Y') ?> EarnMoney.VIP — Kiếm tiền mỗi ngày. 1 USD ≈ <?= vnd((int)\App\Settings::get('usd_to_vnd_rate', '26000')) ?> (member <?= (int)\App\Settings::get('site_member_share_percent', 100) ?>%). Cập nhật: <?= e(\App\Settings::get('usd_rate_updated_at', 'chưa có')) ?></footer>
 <script src="/assets/app.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: earnmoney-vip
+    runtime: docker
+    plan: free
+    region: singapore
+    numInstances: 1
+    healthCheckPath: /
+    envVars:
+      - key: DB_DRIVER
+        value: sqlite
+      - key: SMS_DRIVER
+        value: telegram
+      - key: APP_ENV
+        value: production
+      # Secrets — Render sẽ hỏi giá trị khi tạo Blueprint (không lưu trong repo)
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
+      - key: PUBCRYPTO_SITE_KEY
+        sync: false
+      - key: PUBCRYPTO_API_KEY
+        sync: false
+      - key: POSTBACK_TOKEN
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+

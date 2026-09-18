@@ -1,0 +1,17 @@
+# KHÔNG đưa secret / dữ liệu thật vào Docker image
+config.php
+storage/
+secret.md
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+render.yaml
+README.md
+scripts/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.log

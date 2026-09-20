@@ -13,6 +13,9 @@ services:
         value: telegram
       - key: APP_ENV
         value: production
+      # Domain chính — đổi ở đây nếu sau này đổi domain khác.
+      - key: BASE_URL
+        value: https://htxg.pro
       # DB Neon — điền 1 trong 2 cách (ưu tiên DATABASE_URL copy từ dashboard Neon):
       - key: DATABASE_URL
         sync: false

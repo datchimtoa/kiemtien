@@ -30,7 +30,7 @@
 <?= $content ?>
 </main>
 <footer class="footer">
-  <p>© <?= date('Y') ?> <?= e($siteName ?? 'EarnMoney.VIP') ?> — Kiếm tiền online từ nhiệm vụ.</p>
+  <p>© <?= date('Y') ?> <?= e($siteName ?? 'HTXG.PRO') ?> — High-Traffic X-Gain · Kiếm tiền online từ nhiệm vụ.</p>
 </footer>
 <script src="/assets/app.js" defer></script>
 </body>

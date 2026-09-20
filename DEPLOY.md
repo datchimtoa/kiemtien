@@ -1,10 +1,11 @@
-# DEPLOY — Render (Docker)
+# DEPLOY — Render (Docker) + Neon Postgres
 
 ## Trạng thái hiện tại
 - Repo: https://github.com/datchimtoa/kiemtien
 - Branch: `main`
-- App: PHP 8.3 thuần (no composer) + PDO SQLite/MySQL
-- Domain tạm: Cloudflare tunnel (máy local) — Render sẽ thay thế
+- App: PHP 8.3 thuần (no composer) + PDO SQLite / MySQL / **PostgreSQL**
+- Domain chính: **https://htxg.pro** (High-Traffic X-Gain)
+- Domain Render: `https://<ten>.onrender.com` (đã chạy OK — dùng để kiểm tra khi domain lỗi)
 
 ## ⚠️ CẢNH BÁO QUAN TRỌNG — Render Free tier
 1. **Free web service KHÔNG có persistent disk.**
@@ -24,12 +25,12 @@
 | Render paid + disk | ✅ | $7/tháng |
 
 **Khuyến nghị:** Neon (hoặc Supabase) free Postgres + Render free web.
-⚠️ Nhưng code hiện tại có **SQL phụ thuộc SQLite** cần sửa trước khi chạy Postgres:
-- `app/Schema.php:321` — `INSERT OR IGNORE` (Postgres: `INSERT ... ON CONFLICT DO NOTHING`)
-- `app/Schema.php:256` — `PRAGMA table_info(...)` (Postgres: `information_schema.columns`)
-- `app/Schema.php:17` — `AUTOINCREMENT` vs `SERIAL`
-- `app/Database.php` — chưa có nhánh `pgsql` (cần `pdo_pgsql`)
-- `lastInsertId()` — Postgres cần `RETURNING id`
+
+✅ **Code đã hỗ trợ PostgreSQL (dialect-aware)** — không cần sửa gì thêm:
+- `app/Database.php` — nhánh `pgsql` (đọc `DATABASE_URL` hoặc `DB_HOST/DB_PORT/...`), hỗ trợ SSL
+- `app/Schema.php` — `BIGSERIAL`, `VARCHAR(n)`, `ON CONFLICT DO NOTHING`, `information_schema`, partial unique index
+- `Database::upsert()` / `Database::insertIgnore()` / `lastId()` — tự chọn cú pháp theo driver
+- `INSERT OR IGNORE` → chuyển hết sang helper, chạy được cả 3 driver
 
 ## Các bước deploy Render
 1. Vào https://dashboard.render.com → **New → Blueprint** → chọn repo `datchimtoa/kiemtien`
@@ -51,14 +52,42 @@
 ## Env vars được hỗ trợ (config.sample.php)
 | Var | Ý nghĩa |
 |---|---|
-| `DB_DRIVER` | `sqlite` \| `mysql` |
-| `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` | khi `DB_DRIVER=mysql` |
-| `SMS_DRIVER` | `telegram` \| `log` \| `http` |
+| `DB_DRIVER` | `sqlite` \| `mysql` \| `pgsql` |
+| `DATABASE_URL` | Postgres connection string (Neon) — ưu tiên cao nhất khi `DB_DRIVER=pgsql` |
+| `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` | khi không dùng `DATABASE_URL` |
+| `DB_SSL` / `DB_SSL_CA` | bật TLS (Aiven/Neon yêu cầu) |
+| `SMS_DRIVER` | `telegram` \| `log` \| `http` \| `speedsms` |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` | bot OTP |
-| `PUBCRYPTO_SITE_KEY` / `PUBCRYPTO_API_KEY` / `PUBCRYPTO_API_BASE` | PubCrypto |
+| `PUBCRYPTO_SITE_KEY` / `PUBCRYPTO_API_KEY` / `PUBCRYPTO_FORWARD_SECRET` / `PUBCRYPTO_API_BASE` | PubCrypto |
 | `POSTBACK_TOKEN` | đoạn bí mật trong URL postback |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | tài khoản admin |
-| `RENDER_EXTERNAL_URL` | Render tự set → dùng làm `base_url` |
+| `BASE_URL` | domain chính (vd `https://htxg.pro`) — ưu tiên cao nhất |
+| `RENDER_EXTERNAL_URL` | Render tự set → fallback cho `base_url` |
+
+## 🌐 Gắn custom domain htxg.pro (Cloudflare → Render)
+
+> Triệu chứng khi cấu hình sai: `521` (Cloudflare không tới được origin) hoặc `Not Found` (Render không nhận hostname) — **không phải lỗi code**.
+
+1. **Render** → service `kiemtienvip` → **Settings → Custom Domains → Add Custom Domain**
+   → nhập `htxg.pro` và `www.htxg.pro` → Render hiện target CNAME (`<ten>.onrender.com`) + trạng thái certificate.
+2. **Cloudflare DNS** (zone htxg.pro) → **DNS → Records**:
+   | Type | Name | Content | Proxy |
+   |---|---|---|---|
+   | CNAME | `htxg.pro` (@) | `<ten>.onrender.com` | **DNS only (mây xám)** |
+   | CNAME | `www` | `<ten>.onrender.com` | **DNS only (mây xám)** |
+   - Xoá mọi A/CNAME cũ trỏ sai.
+   - ⚠️ Phải để **DNS only** lúc đầu để Render verify domain + cấp chứng chỉ Let's Encrypt.
+     Sau khi Render báo **"Certificate: Issued"** mới bật proxy (mây cam) nếu muốn.
+3. **Cloudflare SSL/TLS** → mode **Full (strict)** (không dùng Flexible khi origin đã có TLS).
+4. **Render env**: thêm `BASE_URL = https://htxg.pro` → **Manual Deploy / Clear build cache & deploy**.
+5. Trỏ lại 2 thứ dùng domain mới:
+   - Telegram webhook:
+     ```bash
+     curl -s "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
+       -d "url=https://htxg.pro/api/telegram/webhook"
+     ```
+   - PubCrypto Postback URL: `https://htxg.pro/postback/pubcrypto/<POSTBACK_TOKEN>`
+6. Kiểm tra: `curl -I https://htxg.pro/` → **200**. Nếu vẫn `521` → DNS chưa trỏ đúng hoặc proxy đang bật khi cert chưa cấp. Nếu `Not Found` → **chưa add domain trong Render**.
 
 ## Ghi chú
 - `config.php` **không** được commit (`.gitignore`). Dockerfile tự copy `config.sample.php` → `config.php` lúc build, và `config.sample.php` đọc từ env.

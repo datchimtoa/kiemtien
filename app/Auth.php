@@ -22,7 +22,7 @@ final class Auth
             return [false, 'Số điện thoại này đã được đăng ký. Vui lòng đăng nhập.', null, null];
         }
         $otp = Otp::issue($phone, Otp::PURPOSE_REGISTER);
-        $msg = 'Ma xac thuc EarnMoney.VIP cua ban la: ' . $otp['code'] . ' (hieu luc 5 phut). Khong chia se ma nay.';
+        $msg = 'Ma xac thuc HTXG.PRO cua ban la: ' . $otp['code'] . ' (hieu luc 5 phut). Khong chia se ma nay.';
         $sent = Sms::send($phone, $msg);
         if (!$sent['ok']) {
             return [false, 'Không gửi được SMS. Vui lòng thử lại sau.', null, null];
@@ -38,11 +38,11 @@ final class Auth
             return [false, 'Bạn đã yêu cầu quá nhiều mã OTP. Vui lòng thử lại sau.'];
         }
         $otp = Otp::issue($phone, Otp::PURPOSE_LOGIN);
-        $msg = 'Ma dang nhap EarnMoney.VIP: ' . $otp['code'] . ' (hieu luc 5 phut).';
+        $msg = 'Ma dang nhap HTXG.PRO: ' . $otp['code'] . ' (hieu luc 5 phut).';
 
         // Telegram channel first (free).
         if ($telegramChatId !== null && $telegramChatId !== '') {
-            $ok = Telegram::sendMessage($telegramChatId, '🔑 Mã đăng nhập EarnMoney.VIP: ' . $otp['code'] . "\n(hiệu lực 5 phút. Không chia sẻ mã này.)");
+            $ok = Telegram::sendMessage($telegramChatId, '🔑 Mã đăng nhập HTXG.PRO: ' . $otp['code'] . "\n(hiệu lực 5 phút. Không chia sẻ mã này.)");
             if ($ok) {
                 return [true, null, $otp['id'], null, 'telegram'];
             }

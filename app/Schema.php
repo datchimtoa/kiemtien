@@ -356,7 +356,7 @@ final class Schema
     private static function migrateDefaults(PDO $pdo): void
     {
         $defaults = [
-            'site_name'            => 'EarnMoney.VIP',
+            'site_name'            => 'HTXG.PRO',
             'currency_name'        => 'VND',
             'maintenance'          => '0',
             // PubCrypto integration
@@ -384,7 +384,7 @@ final class Schema
             'sms_http_method'      => 'POST',
             'sms_http_headers'     => "Content-Type: application/json",
             'sms_http_body_template' => '',
-            'sms_sender'           => 'EARNVIP',
+            'sms_sender'           => 'HTXG',
             // SpeedSMS.vn driver
             'speedsms_token'       => '',
             'speedsms_zns_template_id' => '',
@@ -423,6 +423,14 @@ final class Schema
             } catch (\Throwable $e) {
                 // Đã tồn tại hoặc lỗi seed → bỏ qua, giữ giá trị hiện có.
             }
+        }
+
+        // Self-heal: DB đã tồn tại từ thời brand cũ → cập nhật sang brand hiện tại.
+        try {
+            $pdo->prepare("UPDATE settings SET svalue = ?, updated_at = ? WHERE skey = 'site_name' AND svalue = ?")
+                ->execute(['HTXG.PRO', $now, 'EarnMoney.VIP']);
+        } catch (\Throwable $e) {
+            // Bỏ qua nếu bảng chưa sẵn sàng.
         }
     }
 }

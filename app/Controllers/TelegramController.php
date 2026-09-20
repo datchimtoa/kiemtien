@@ -51,7 +51,7 @@ final class TelegramController
 
         Telegram::sendMessage(
             $chatId,
-            "Bot xác thực của EarnMoney.VIP.\nMở trang web → đăng ký → chọn \"Xác thực qua Telegram\" để nhận link."
+            "Bot xác thực của HTXG.PRO.\nMở trang web → đăng ký → chọn \"Xác thực qua Telegram\" để nhận link."
         );
         http_response_code(200);
         echo 'ok';

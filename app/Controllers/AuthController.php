@@ -132,7 +132,7 @@ final class AuthController
         Session::forget('reg_tg_verified');
         Session::forget('reg_tg_user_id');
         Session::forget('reg_tg_username');
-        Session::flash('success', 'Đăng ký thành công! Chào mừng bạn đến với EarnMoney.VIP.');
+        Session::flash('success', 'Đăng ký thành công! Chào mừng bạn đến với HTXG.PRO.');
         redirect('/dashboard');
     }
 

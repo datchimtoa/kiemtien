@@ -15,7 +15,7 @@ final class HomeController
             redirect('/dashboard');
         }
         View::show('home/landing', [
-            'siteName'    => (string)Settings::get('site_name', 'EarnMoney.VIP'),
+            'siteName'    => (string)Settings::get('site_name', 'HTXG.PRO'),
             'minWithdraw' => (int)Settings::get('min_withdraw_vnd', '50000'),
         ], 'base');
     }

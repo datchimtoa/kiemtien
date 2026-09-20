@@ -47,7 +47,12 @@ header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'self'; base-uri 'self'");
 
 Session::start();
-Database::migrate();
+try {
+    Database::migrate();
+} catch (\Throwable $e) {
+    // Lỗi migrate không được làm chết cả site: các bảng chính đã có sẵn, ghi log để xử lý sau.
+    error_log('[migrate] failed: ' . $e->getMessage());
+}
 \App\RateUpdater::refresh();
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -113,6 +118,7 @@ $handled = match (true) {
     $path === '/admin/settings'                && $method === 'GET'  => AdminController::settings(),
     $path === '/admin/settings'                && $method === 'POST' => AdminController::saveSettings(),
     $path === '/admin/audit'                   && $method === 'GET'  => AdminController::audit(),
+    $path === '/admin/diag'                    && $method === 'GET'  => AdminController::diag(),
     default => null,
 };
 if ($handled !== null) {

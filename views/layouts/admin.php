@@ -20,6 +20,7 @@
     <a href="/admin/risk">Rủi ro</a>
     <a href="/admin/settings">Cài đặt</a>
     <a href="/admin/audit">Audit</a>
+    <a href="/admin/diag">🩺 Chẩn đoán</a>
     <form method="post" action="/admin/logout" class="inline"><?= \App\Csrf::field() ?><button class="btn-link">Đăng xuất</button></form>
   </nav>
 </header>

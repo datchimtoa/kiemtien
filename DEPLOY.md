@@ -89,6 +89,27 @@
    - PubCrypto Postback URL: `https://htxg.pro/postback/pubcrypto/<POSTBACK_TOKEN>`
 6. Kiểm tra: `curl -I https://htxg.pro/` → **200**. Nếu vẫn `521` → DNS chưa trỏ đúng hoặc proxy đang bật khi cert chưa cấp. Nếu `Not Found` → **chưa add domain trong Render**.
 
+## 🐞 Sự cố đã gặp &amp; cách khắc phục
+
+### 1) Đăng nhập báo `SQLSTATE[25P02] In failed sql transaction`
+- **Nguyên nhân gốc:** `rate_buckets.window_start` khai báo `TEXT(32)` / `VARCHAR(32)` nhưng `RateLimiter` ghi `time()` (**số nguyên**) và so sánh `window_start < <số>`. SQLite/MySQL bỏ qua chuyện này, còn **Postgres báo lỗi kiểu dữ liệu** → câu lệnh lỗi → transaction bị *aborted* → mọi câu lệnh sau đó trả **25P02** → trang login chết với fatal error 500.
+- **Đã sửa (commit mới):**
+  - Cột `window_start` chuyển sang `BIGINT` (DDL mới) và **tự chuyển đổi cột cũ** khi migrate (`ALTER ... USING ...::bigint`).
+  - `Database::run()` phát hiện 25P02 → rollback + **chạy lại 1 lần** (tự phục hồi), ghi log `[db] 25P02 ...` kèm câu SQL.
+  - `RateLimiter` **fail-open**: DB lỗi thì vẫn cho qua + ghi log, không bao giờ làm sập login/đăng ký.
+  - `app/bootstrap.php` cài `set_exception_handler`: người dùng thấy trang lỗi thân thiện + **mã lỗi** (thay vì fatal error lộ đường dẫn).
+  - `Schema::migrate()` có fast-path `schema_version` (bớt ~25 câu DDL mỗi request) và **ghi log** mọi lỗi DDL (trước đây bị nuốt im lặng).
+- **Tự kiểm tra:** đăng nhập admin → menu **🩺 Chẩn đoán** (`/admin/diag`) → xem driver, cột `rate_buckets`, test transaction, số bản ghi. Nếu có dòng đỏ, gửi nguyên dòng đó (đó là lỗi gốc, không phải lỗi phụ 25P02).
+- **Lưu ý khi thêm migration mới:** tăng `Schema::VERSION` trong `app/Schema.php`, nếu không DB đã tồn tại sẽ bỏ qua thay đổi.
+
+### 2) Bấm "Xác thực qua Telegram (miễn phí)" chỉ tải lại trang
+- **Nguyên nhân:** nút này nằm cùng form bước 1 (gửi kèm `phone`), nhưng handler cũ chỉ đọc `Session::reg_phone` — biến chỉ được tạo bởi luồng SMS → session rỗng → `redirect('/register')` **im lặng** nên trông như trang tự tải lại.
+- **Đã sửa:** handler đọc `phone` từ form, kiểm tra số đã đăng ký, lưu session, tạo link bot, và **luôn hiện thông báo** khi có lỗi (số sai, trùng số, quá nhiều link/giờ). Trang chờ Telegram có nút "Tôi đã bấm START — kiểm tra ngay".
+
+### 3) Lưu ý kết nối Neon
+- Nên dùng **connection string trực tiếp** (`ep-xxx.<region>.aws.neon.tech`) thay vì endpoint **pooled** (`...-pooler...`): app PHP là web server chạy dài, còn pooled endpoint (PgBouncer transaction pooling) dễ xung đột với prepared statement của PDO → lỗi transaction khó lần.
+- Nếu buộc phải dùng pooled mà thấy lỗi transaction lạ, đổi sang direct là hết.
+
 ## Ghi chú
 - `config.php` **không** được commit (`.gitignore`). Dockerfile tự copy `config.sample.php` → `config.php` lúc build, và `config.sample.php` đọc từ env.
 - `.dockerignore` chặn `config.php`, `storage/`, `secret.md` vào image → tránh lộ secret/user data.

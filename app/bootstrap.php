@@ -231,3 +231,49 @@ spl_autoload_register(static function (string $class): void {
 
 date_default_timezone_set((string)(config('timezone') ?: 'Asia/Ho_Chi_Minh'));
 ensure_storage();
+
+/**
+ * Xử lý lỗi toàn cục: không bao giờ để người dùng thấy "Fatal error: Uncaught PDOException"
+ * (lộ đường dẫn + chi tiết DB). Ghi log đầy đủ kèm mã lỗi và hiển thị trang thân thiện.
+ */
+set_exception_handler(static function (\Throwable $e): void {
+    $ref = strtoupper(bin2hex(random_bytes(4)));
+    error_log('[fatal] ref=' . $ref . ' ' . get_class($e) . ': ' . $e->getMessage()
+        . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n" . $e->getTraceAsString());
+
+    $path = (string)(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+    $wantsJson = str_starts_with($path, '/api/')
+        || str_starts_with($path, '/postback/')
+        || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'json');
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    if ($wantsJson) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode(['ok' => false, 'error' => 'internal_error', 'ref' => $ref], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+    $detail = (defined('APP_DEV') && APP_DEV)
+        ? '<pre style="white-space:pre-wrap;font-size:12px;opacity:.8">' . htmlspecialchars((string)$e, ENT_QUOTES) . '</pre>'
+        : '<p>Mã lỗi: <code>' . $ref . '</code> — gửi mã này cho hỗ trợ để được kiểm tra.</p>';
+    if (!headers_sent()) {
+        header('Content-Type: text/html; charset=utf-8');
+    }
+    echo '<!doctype html><html lang="vi"><head><meta charset="utf-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1"><title>Lỗi hệ thống</title></head>'
+        . '<body style="margin:0;padding:40px;background:#0f1115;color:#e8e8e8;font-family:system-ui,sans-serif">'
+        . '<h1 style="font-size:20px">⚠️ Hệ thống đang bận</h1>'
+        . '<p>Vui lòng thử lại sau vài giây.</p>' . $detail
+        . '<p><a style="color:#6ee7b7" href="/">← Về trang chủ</a></p></body></html>';
+});
+
+/** Warning/notice → log, không in ra HTML (tránh làm hỏng header/JSON). */
+set_error_handler(static function (int $no, string $msg, string $file = '', int $line = 0): bool {
+    if (!(error_reporting() & $no)) {
+        return false;
+    }
+    error_log('[php] ' . $msg . ' @ ' . $file . ':' . $line);
+    return true;
+});

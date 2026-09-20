@@ -40,13 +40,12 @@ final class Wallet
         int $amountVnd,
         array $meta = []
     ): int {
-        $db = Database::pdo();
-        $db->beginTransaction();
+        Database::begin();
         try {
             $lock = Database::isSqlite() ? '' : ' FOR UPDATE';
             $row = Database::one('SELECT balance_vnd, points_total FROM users WHERE id = ?' . $lock, [$userId]);
             if ($row === null) {
-                $db->rollBack();
+                Database::rollback();
                 throw new \RuntimeException('user not found: ' . $userId);
             }
             $newBalance = (int)$row['balance_vnd'] + $amountVnd;
@@ -65,7 +64,7 @@ final class Wallet
             if ($transId !== '') {
                 $dupe = Database::one('SELECT id FROM transactions WHERE trans_id = ?', [$transId]);
                 if ($dupe !== null) {
-                    $db->rollBack();
+                    Database::rollback();
                     // Duplicate — treat as no-op, return current balance.
                     return (int)$row['balance_vnd'];
                 }
@@ -90,10 +89,10 @@ final class Wallet
                     now(),
                 ]
             );
-            $db->commit();
+            Database::commit();
             return $newBalance;
         } catch (\Throwable $e) {
-            $db->rollBack();
+            Database::rollback();
             throw $e;
         }
     }

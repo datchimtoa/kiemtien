@@ -103,12 +103,57 @@ final class Database
         return self::$pdo;
     }
 
-    /** Run a statement with params. Returns PDOStatement. */
+    /** TRUE when a transaction the caller opened was lost by automatic recovery. */
+    private static bool $txnLost = false;
+
+    /**
+     * SQLSTATE có thể tự phục hồi: transaction đang ở trạng thái "aborted".
+     * Postgres chặn MỌI câu lệnh sau một lỗi trong cùng transaction (25P02),
+     * nên nếu không phục hồi thì cả request chết theo (đúng lỗi login đã gặp).
+     * 40001/40P01 = deadlock/serialization → cũng nên thử lại.
+     */
+    private static function isRecoverable(PDOException $e): bool
+    {
+        $state = (string)($e->errorInfo[0] ?? $e->getCode());
+        return in_array($state, ['25P02', '40001', '40P01'], true);
+    }
+
+    /** SQL gọn để ghi log (tránh log khổng lồ). */
+    private static function shortSql(string $sql): string
+    {
+        return preg_replace('/\s+/', ' ', substr($sql, 0, 160)) ?? '';
+    }
+
+    /**
+     * Run a statement with params. Returns PDOStatement.
+     *
+     * Tự phục hồi khi transaction bị "aborted" (SQLSTATE 25P02): rollback câu lệnh
+     * đang treo rồi chạy lại 1 lần. Nhờ vậy 1 lỗi ở chỗ khác không làm chết cả
+     * request phía sau (trước đây login trả về fatal error 500).
+     */
     public static function run(string $sql, array $params = []): \PDOStatement
     {
-        $stmt = self::pdo()->prepare($sql);
-        $stmt->execute($params);
-        return $stmt;
+        try {
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($params);
+            return $stmt;
+        } catch (PDOException $e) {
+            if (!self::isRecoverable($e)) {
+                throw $e;
+            }
+            $state = (string)($e->errorInfo[0] ?? $e->getCode());
+            $wasInTxn = self::inTransaction();
+            // Ghi lại lỗi thật để đọc được trong log Render (trước đây bị nuốt im lặng).
+            error_log('[db] ' . $state . ' (' . $e->getMessage() . ') on: ' . self::shortSql($sql)
+                . ' — rollback + retry once' . ($wasInTxn ? ' (transaction was open)' : ''));
+            self::rollbackQuietly();
+            if ($wasInTxn) {
+                self::$txnLost = true;
+            }
+            $stmt = self::pdo()->prepare($sql);
+            $stmt->execute($params);
+            return $stmt;
+        }
     }
 
     public static function one(string $sql, array $params = []): ?array
@@ -138,9 +183,52 @@ final class Database
         return (int)self::pdo()->lastInsertId();
     }
 
-    public static function begin(): void { self::pdo()->beginTransaction(); }
-    public static function commit(): void { if (self::pdo()->inTransaction()) { self::pdo()->commit(); } }
-    public static function rollback(): void { if (self::pdo()->inTransaction()) { self::pdo()->rollBack(); } }
+    /** Begin a transaction, cleaning up any stale/aborted one left by an earlier failure. */
+    public static function begin(): void
+    {
+        self::$txnLost = false;
+        if (self::pdo()->inTransaction()) {
+            self::rollbackQuietly();
+        }
+        self::pdo()->beginTransaction();
+    }
+
+    /**
+     * Commit. If the transaction was lost during automatic recovery (25P02), the
+     * statements were retried outside the transaction → we must NOT report success
+     * to money-critical callers, so this throws so they can log + retry safely.
+     */
+    public static function commit(): void
+    {
+        if (self::$txnLost) {
+            self::$txnLost = false;
+            throw new RuntimeException('transaction lost during SQLSTATE recovery — statement was retried in autocommit');
+        }
+        if (self::pdo()->inTransaction()) {
+            self::pdo()->commit();
+        }
+    }
+
+    public static function rollback(): void
+    {
+        self::$txnLost = false;
+        if (self::pdo()->inTransaction()) {
+            self::pdo()->rollBack();
+        }
+    }
+
+    /** Rollback that never throws (used by recovery paths). */
+    public static function rollbackQuietly(): void
+    {
+        try {
+            if (self::pdo()->inTransaction()) {
+                self::pdo()->rollBack();
+            }
+        } catch (\Throwable $e) {
+            error_log('[db] rollback failed: ' . $e->getMessage());
+        }
+    }
+
     public static function inTransaction(): bool { return self::pdo()->inTransaction(); }
 
     /** TRUE if the driver is sqlite (affects SQL dialect). */
@@ -152,7 +240,12 @@ final class Database
     /** Create/update schema (idempotent). */
     public static function migrate(): void
     {
-        Schema::migrate(self::pdo());
+        // Lỗi DDL không được phép để lại transaction treo → mọi câu lệnh sau sẽ 25P02.
+        try {
+            Schema::migrate(self::pdo());
+        } finally {
+            self::rollbackQuietly();
+        }
     }
 
     /**

@@ -11,8 +11,30 @@ use PDO;
  */
 final class Schema
 {
+    /**
+     * Tăng số này MỖI KHI thêm/bớt DDL, cột, index hoặc setting mặc định mới,
+     * nếu không thay đổi sẽ không được áp dụng cho DB đã tồn tại.
+     */
+    private const VERSION = '2026-09-20.2';
+
+    /** Cờ đánh dấu rate_buckets đã đúng cấu trúc (tránh kiểm tra mỗi request). */
+    private const FLAG_RATE_BUCKETS = 'rate_buckets_ok';
+
     public static function migrate(PDO $pdo): void
     {
+        // Fast-path: schema đã đúng version → bỏ qua ~25 câu DDL mỗi request
+        // (nhanh hơn rõ rệt với Postgres remote như Neon và tránh DDL lặp lại vô ích).
+        try {
+            if (Database::value("SELECT svalue FROM settings WHERE skey = 'schema_version'") === self::VERSION) {
+                // Chỉ kiểm tra rate_buckets khi cờ chưa được ghi (thường chỉ 1 request đầu).
+                if (Database::value('SELECT svalue FROM settings WHERE skey = ?', [self::FLAG_RATE_BUCKETS]) !== '1') {
+                    self::ensureRateBuckets($pdo);
+                }
+                return;
+            }
+        } catch (\Throwable $e) {
+            // Bảng settings chưa tồn tại (lần chạy đầu) → chạy migrate đầy đủ bên dưới.
+        }
         $sqlite = Database::isSqlite();
         $pgsql = Database::isPgsql();
         // Postgres: BIGSERIAL PK, TEXT thay TEXT(n), VARCHAR thay TEXT(n).
@@ -42,7 +64,8 @@ final class Schema
                     $pdo->exec(($unique ? 'CREATE UNIQUE INDEX ' : 'CREATE INDEX ') . "{$name} ON {$table}({$cols})");
                 }
             } catch (\Throwable $e) {
-                // Index có thể đã tồn tại do race → bỏ qua.
+                // Index có thể đã tồn tại do race → bỏ qua (ghi log để còn chẩn đoán).
+                error_log('[schema] index ' . $name . ' on ' . $table . ' skipped: ' . $e->getMessage());
             }
         };
 
@@ -149,6 +172,7 @@ final class Schema
                     $pdo->exec(($unique ? 'CREATE UNIQUE INDEX ' : 'CREATE INDEX ') . "{$name} ON {$table}({$cols})");
                 }
             } catch (\Throwable $e) {
+                error_log('[schema] index ' . $name . ' on ' . $table . ' skipped: ' . $e->getMessage());
             }
         };
         $pdo->exec("CREATE TABLE IF NOT EXISTS transactions (
@@ -265,11 +289,15 @@ final class Schema
         )");
         $idx('idx_clicks_user_time', 'task_clicks', 'user_id, created_at');
 
+        // window_start lưu UNIX timestamp (số). Postgres/MySQL dùng kiểu số để so sánh
+        // và ràng buộc kiểu đúng; SQLite giữ TEXT(32) để tương thích DB cũ (TEXT affinity).
+        $windowStartType = $sqlite ? 'TEXT(32)' : 'BIGINT';
         $pdo->exec("CREATE TABLE IF NOT EXISTS rate_buckets (
             bucket {$text(160)} PRIMARY KEY,
             hits INTEGER NOT NULL DEFAULT 0,
-            window_start {$text(32)} NOT NULL
+            window_start {$windowStartType} NOT NULL
         )");
+        self::ensureRateBuckets($pdo);
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS fingerprints (
             id {$pk},
@@ -309,6 +337,17 @@ final class Schema
 
         self::migrateColumns($pdo);
         self::migrateDefaults($pdo);
+        // Ghi nhớ version để các request sau bỏ qua bước migrate.
+        try {
+            Database::upsert(
+                'settings',
+                ['skey' => 'schema_version', 'svalue' => self::VERSION, 'updated_at' => now()],
+                'skey',
+                ['svalue', 'updated_at']
+            );
+        } catch (\Throwable $e) {
+            error_log('[schema] cannot record schema_version: ' . $e->getMessage());
+        }
     }
 
     /** Add columns that were introduced after the first release. */
@@ -351,6 +390,91 @@ final class Schema
         $add('users', 'telegram_user_id', "TEXT(32) DEFAULT ''");
         $add('users', 'telegram_username', "TEXT(64) DEFAULT ''");
         $add('users', 'telegram_verified_at', 'TEXT(32)');
+    }
+
+    /**
+     * rate_buckets là bảng tạm của rate limiter. DB tạo từ phiên bản schema cũ có thể lệch:
+     *  - window_start từng khai báo TEXT(32)/VARCHAR(32) nhưng code ghi số (time()).
+     *    Postgres so kiểu rất chặt → câu lệnh lỗi trong transaction → transaction "aborted"
+     *    → mọi câu lệnh sau trả SQLSTATE 25P02 (chính là lỗi làm hỏng trang đăng nhập).
+     *  - thiếu UNIQUE(bucket) → limiter đếm sai.
+     * Sửa 1 lần, sau đó ghi cờ vào settings để không phải kiểm tra lại mỗi request.
+     */
+    private static function ensureRateBuckets(PDO $pdo): void
+    {
+        if (Database::isSqlite()) {
+            // SQLite: TEXT affinity vẫn lưu + so sánh số được → không cần sửa, chỉ ghi cờ.
+            self::markRateBucketsOk();
+            return;
+        }
+        try {
+            $bad = [];
+            if (Database::isPgsql()) {
+                $cols = [];
+                foreach (Database::all(
+                    'SELECT column_name, data_type FROM information_schema.columns WHERE table_name = ?',
+                    ['rate_buckets']
+                ) as $r) {
+                    $cols[strtolower((string)$r['column_name'])] = strtolower((string)$r['data_type']);
+                }
+                $type = $cols['window_start'] ?? '';
+                if (!in_array($type, ['bigint', 'integer'], true)) {
+                    $bad[] = 'window_start=' . ($type !== '' ? $type : 'missing');
+                    if ($type !== '') {
+                        $pdo->exec(
+                            'ALTER TABLE rate_buckets ALTER COLUMN window_start TYPE BIGINT '
+                            . "USING COALESCE(NULLIF(regexp_replace(window_start::text, '[^0-9]', '', 'g'), ''), '0')::bigint"
+                        );
+                    }
+                }
+                $uniq = (int)Database::value(
+                    "SELECT COUNT(*) FROM pg_indexes WHERE tablename = ? AND indexdef ILIKE '%unique%' AND indexdef ILIKE '%bucket%'",
+                    ['rate_buckets']
+                );
+                if ($uniq === 0) {
+                    $bad[] = 'missing unique(bucket)';
+                    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS uq_rate_buckets_bucket ON rate_buckets(bucket)');
+                }
+            } else {
+                $cols = [];
+                foreach (Database::all(
+                    'SELECT COLUMN_NAME AS c, DATA_TYPE AS t FROM information_schema.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                    ['rate_buckets']
+                ) as $r) {
+                    $cols[strtolower((string)$r['c'])] = strtolower((string)$r['t']);
+                }
+                $type = $cols['window_start'] ?? '';
+                if (!in_array($type, ['bigint', 'int', 'integer'], true)) {
+                    $bad[] = 'window_start=' . ($type !== '' ? $type : 'missing');
+                    if ($type !== '') {
+                        $pdo->exec('ALTER TABLE rate_buckets MODIFY window_start BIGINT NOT NULL');
+                    }
+                }
+            }
+            if ($bad) {
+                error_log('[schema] rate_buckets repaired → ' . implode('; ', $bad));
+            }
+            self::markRateBucketsOk();
+        } catch (\Throwable $e) {
+            // Không chặn app: RateLimiter đã có fail-open + tự phục hồi 25P02.
+            error_log('[schema] ensureRateBuckets failed: ' . $e->getMessage());
+        }
+    }
+
+    /** Ghi cờ "rate_buckets đã đúng" để bỏ qua bước kiểm tra ở các request sau. */
+    private static function markRateBucketsOk(): void
+    {
+        try {
+            Database::upsert(
+                'settings',
+                ['skey' => self::FLAG_RATE_BUCKETS, 'svalue' => '1', 'updated_at' => now()],
+                'skey',
+                ['svalue', 'updated_at']
+            );
+        } catch (\Throwable $e) {
+            error_log('[schema] cannot set ' . self::FLAG_RATE_BUCKETS . ': ' . $e->getMessage());
+        }
     }
 
     private static function migrateDefaults(PDO $pdo): void
@@ -422,6 +546,7 @@ final class Schema
                 }
             } catch (\Throwable $e) {
                 // Đã tồn tại hoặc lỗi seed → bỏ qua, giữ giá trị hiện có.
+                error_log('[schema] seed setting ' . $k . ' skipped: ' . $e->getMessage());
             }
         }
 
@@ -431,6 +556,7 @@ final class Schema
                 ->execute(['HTXG.PRO', $now, 'EarnMoney.VIP']);
         } catch (\Throwable $e) {
             // Bỏ qua nếu bảng chưa sẵn sàng.
+            error_log('[schema] site_name self-heal skipped: ' . $e->getMessage());
         }
     }
 }

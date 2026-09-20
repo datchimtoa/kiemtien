@@ -195,20 +195,43 @@ final class AuthController
     public static function postRegisterTelegram(): void
     {
         Csrf::check();
-        $phone = Session::get('reg_phone');
+        // Trước đây hàm này CHỈ đọc Session::get('reg_phone') — biến đó chỉ được tạo bởi
+        // luồng SMS (postPhone). Người dùng nhập số ở bước 1 rồi bấm nút Telegram (cùng form,
+        // formaction="/register/telegram") → session rỗng → redirect im lặng → trang như
+        // "tự tải lại" mà không xác thực gì. Nay đọc số điện thoại trực tiếp từ form.
+        $rawPhone = (string)input('phone', '');
+        $phone = null;
+        if ($rawPhone !== '') {
+            $phone = normalize_phone($rawPhone);
+            if ($phone === null) {
+                Session::flash('error', 'Số điện thoại không hợp lệ (VD: 0912345678). Vui lòng nhập lại.');
+                redirect('/register');
+            }
+        }
         if ($phone === null) {
+            $phone = (string)Session::get('reg_phone', '');
+        }
+        if ($phone === '') {
+            Session::flash('error', 'Vui lòng nhập số điện thoại rồi bấm "Xác thực qua Telegram (miễn phí)".');
             redirect('/register');
         }
         if (!\App\Telegram::enabled()) {
-            Session::flash('error', 'Xác thực Telegram chưa được bật. Vui lòng dùng SMS.');
+            Session::flash('error', 'Xác thực Telegram chưa được bật. Vui lòng liên hệ hỗ trợ.');
             redirect('/register');
         }
+        if (Database::one('SELECT id FROM users WHERE phone = ?', [$phone]) !== null) {
+            Session::flash('error', 'Số điện thoại này đã được đăng ký. Vui lòng đăng nhập hoặc dùng số khác.');
+            redirect('/register');
+        }
+        // Lưu để /register/step2 + /register/verify dùng lại (trước đây thiếu bước này).
+        Session::set('reg_phone', $phone);
         $res = \App\Telegram::createVerify($phone);
         if ($res === null) {
-            Session::flash('error', 'Bạn tạo link Telegram quá nhiều lần. Vui lòng thử lại sau 1 giờ.');
+            Session::flash('error', 'Bạn đã tạo link Telegram quá nhiều lần cho số này. Vui lòng chờ 1 giờ rồi thử lại.');
             redirect('/register');
         }
         Session::set('reg_tg_token', $res['token']);
+        Session::set('reg_tg_verified', false);
         View::show('auth/telegram', [
             'bot'    => \App\Telegram::botUsername(),
             'token'  => $res['token'],

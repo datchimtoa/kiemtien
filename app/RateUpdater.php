@@ -30,6 +30,16 @@ final class RateUpdater
 
     public static function refresh(): void
     {
+        // Chạy trên MỌI request → không được để lỗi mạng/DB làm sập cả site.
+        try {
+            self::doRefresh();
+        } catch (\Throwable $e) {
+            error_log('[rate] refresh failed (giữ tỉ giá cũ): ' . $e->getMessage());
+        }
+    }
+
+    private static function doRefresh(): void
+    {
         if (Settings::getInt('usd_rate_auto', 1) !== 1) {
             return;
         }

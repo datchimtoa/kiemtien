@@ -7,9 +7,11 @@ use App\AdminAuth;
 use App\Audit;
 use App\Csrf;
 use App\Database;
+use App\RateLimiter;
 use App\RateUpdater;
 use App\Risk;
 use App\Session;
+use App\Telegram;
 use App\View;
 use App\Wallet;
 use App\Withdrawals;
@@ -217,6 +219,111 @@ final class AdminController
         AdminAuth::require();
         $rows = Database::all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 200');
         View::show('admin/audit', ['rows' => $rows], 'admin');
+    }
+
+        /** 🩺 Chẩn đoán DB từ xa (không cần shell) — dùng khi login/tiền báo lỗi. */
+    public static function diag(): void
+    {
+        AdminAuth::require();
+        $ok = [];
+        $err = [];
+        $run = static function (string $label, callable $fn) use (&$ok, &$err): void {
+            try {
+                $ok[$label] = (string)$fn();
+            } catch (\Throwable $e) {
+                $state = $e instanceof \PDOException ? (string)($e->errorInfo[0] ?? '?') : '-';
+                $err[$label] = get_class($e) . ' [SQLSTATE ' . $state . ']: ' . $e->getMessage();
+            }
+        };
+
+        $run('Môi trường', static fn(): string => 'PHP ' . PHP_VERSION
+            . ' · PDO: ' . implode(', ', \PDO::getAvailableDrivers()));
+        $run('Driver DB', static fn(): string => (string)(config('db')['driver'] ?? 'sqlite')
+            . (Database::isPgsql() ? ' (postgres)' : (Database::isSqlite() ? ' (sqlite)' : '')));
+        $run('Phiên bản DB', static function (): string {
+            if (Database::isSqlite()) {
+                return 'SQLite ' . (string)Database::value('SELECT sqlite_version()');
+            }
+            if (Database::isPgsql()) {
+                return (string)Database::value('SHOW server_version');
+            }
+            return (string)Database::value('SELECT VERSION()');
+        });
+        $run('schema_version', static fn(): string => (string)(Database::value(
+            "SELECT svalue FROM settings WHERE skey = 'schema_version'"
+        ) ?? '(chưa ghi — sẽ migrate ở request này)'));
+        $run('Index của settings (cần cho upsert)', static function (): string {
+            if (Database::isPgsql()) {
+                return implode(' | ', array_map(
+                    static fn(array $r): string => (string)$r['indexdef'],
+                    Database::all("SELECT indexdef FROM pg_indexes WHERE tablename = 'settings'")
+                ));
+            }
+            if (Database::isSqlite()) {
+                return implode(' | ', array_map(
+                    static fn(array $r): string => json_encode($r, JSON_UNESCAPED_UNICODE) ?: '',
+                    Database::all('PRAGMA index_list(settings)')
+                ));
+            }
+            return implode(' | ', array_map(
+                static fn(array $r): string => (string)$r['d'],
+                Database::all(
+                    'SELECT CONCAT(INDEX_NAME, " (", COLUMN_NAME, ")") AS d FROM information_schema.STATISTICS
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                    ['settings']
+                )
+            ));
+        });
+        $run('Cột của rate_buckets', static function (): string {
+            if (Database::isSqlite()) {
+                return implode(', ', array_map(
+                    static fn(array $c): string => (string)$c['name'] . ':' . (string)$c['type'],
+                    Database::all('PRAGMA table_info(rate_buckets)')
+                ));
+            }
+            if (Database::isPgsql()) {
+                return implode(', ', array_map(
+                    static fn(array $c): string => (string)$c['column_name'] . ':' . (string)$c['data_type'],
+                    Database::all(
+                        'SELECT column_name, data_type FROM information_schema.columns
+                         WHERE table_name = ? ORDER BY ordinal_position',
+                        ['rate_buckets']
+                    )
+                ));
+            }
+            return implode(', ', array_map(
+                static fn(array $c): string => (string)$c['COLUMN_NAME'] . ':' . (string)$c['DATA_TYPE'],
+                Database::all(
+                    'SELECT COLUMN_NAME, DATA_TYPE FROM information_schema.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+                    ['rate_buckets']
+                )
+            ));
+        });
+        $run('Test transaction (BEGIN/INSERT/SELECT/COMMIT)', static function (): string {
+            $key = 'diag:' . bin2hex(random_bytes(4));
+            Database::begin();
+            Database::run('INSERT INTO rate_buckets(bucket, hits, window_start) VALUES(?, 1, ?)', [$key, time()]);
+            $row = Database::one('SELECT hits, window_start FROM rate_buckets WHERE bucket = ?', [$key]);
+            Database::run('DELETE FROM rate_buckets WHERE bucket = ?', [$key]);
+            Database::commit();
+            return 'OK — dữ liệu đọc lại: ' . json_encode($row, JSON_UNESCAPED_UNICODE);
+        });
+        $run('RateLimiter', static fn(): string => RateLimiter::attempt('diag', client_ip(), 3, 60)
+            ? 'OK — cho phép (DB lỗi thì tự fail-open, xem log Render)'
+            : 'Đang bị chặn (đã dùng hết 3 lượt/60s)');
+        $run('Số bản ghi', static fn(): string => 'users=' . (int)Database::value('SELECT COUNT(*) FROM users')
+            . ', telegram_verify=' . (int)Database::value('SELECT COUNT(*) FROM telegram_verify')
+            . ', rate_buckets=' . (int)Database::value('SELECT COUNT(*) FROM rate_buckets')
+            . ', settings=' . (int)Database::value('SELECT COUNT(*) FROM settings'));
+        $run('Telegram', static fn(): string => (Telegram::enabled() ? 'đã bật' : 'CHƯA BẬT (thiếu TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME)')
+            . ' · bot=@' . (Telegram::botUsername() ?: '?'));
+
+        View::show('admin/diag', [
+            'ok'      => $ok,
+            'err'     => $err,
+            'baseUrl' => (string)(config('base_url') ?? ''),
+        ], 'admin');
     }
 
         public static function settings(): void

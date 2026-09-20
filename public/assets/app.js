@@ -48,7 +48,7 @@
     if (started && !started.value) { started.value = Math.floor(Date.now() / 1000); }
   });
 
-  // ---------- task starter (PubCrypto Link) ----------
+  // ---------- task starter (PubCrypto Link) — auto redirect back to /tasks ----------
   document.querySelectorAll('.do-task').forEach(function (btn) {
     btn.addEventListener('click', function (ev) {
       ev.preventDefault();
@@ -62,7 +62,15 @@
       }).then(function (r) { return r.json().then(function (j) { return { s: r.status, j: j }; }); })
         .then(function (o) {
           if (o.j && o.j.ok && o.j.redirect) {
-            window.location.href = o.j.redirect;
+            // Open the one-time PubCrypto link in a new tab so the user can complete it,
+            // then automatically return to /tasks to pick the next task.
+            window.open(o.j.redirect, '_blank', 'noopener');
+            btn.textContent = '✅ Đã mở — làm tiếp nhiệm vụ khác';
+            setTimeout(function () {
+              btn.disabled = false;
+              btn.textContent = '🚀 Bắt đầu';
+              location.href = '/tasks'; // refresh cooldown/quota state
+            }, 3000);
             return;
           }
           alert((o.j && o.j.error) || 'Không tạo được nhiệm vụ. Thử lại sau.');
@@ -81,5 +89,18 @@
   if (methodSel && bankWrap) {
     var sync = function () { bankWrap.style.display = methodSel.value === 'bank' ? '' : 'none'; };
     methodSel.addEventListener('change', sync); sync();
+  }
+
+  // ---------- manual claim-result redirect (PubCrypto may keep user on their site) ----------
+  // If user returns to /tasks and PubCrypto set a "back" URL, redirect back to /tasks.
+  // This is a safety net in case the postback opens in a popup.
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('claim_done') === '1') {
+    // User just completed a task (PubCrypto redirected back) → show a flash-like notice.
+    var notice = document.createElement('div');
+    notice.className = 'flash success';
+    notice.textContent = '✅ Nhiệm vụ đang được xác nhận. Tiền sẽ tự cộng vào ví trong ít phút.';
+    var first = document.querySelector('.page-head');
+    if (first) { first.insertAdjacentElement('afterend', notice); }
   }
 })();

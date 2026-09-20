@@ -6,8 +6,8 @@
 <?php else: ?>
   <div class="task-grid">
   <?php foreach ($res['tasks'] as $t):
+    // Member chỉ thấy số VND họ nhận — KHÔNG hiển thị rate admin (USD) anywhere.
     $memberVnd = (int)floor($t["member_reward"]);
-    $adminUsd = (float)($t["reward_usd"] ?? 0);
     $state = $t['cooldown_remaining'] > 0 ? 'cool' : ($t['available'] ? 'ok' : 'off');
     $remaining = max(0, $t['remaining_in_cycle']);
   ?>
@@ -16,7 +16,6 @@
         <span class="task-name"><?= e($t['task_name']) ?></span>
         <span class="reward"><?= vnd($memberVnd) ?></span>
       </div>
-      <div class="task-sub muted">Giá gốc: $<?= number_format($adminUsd, 4) ?> · Bạn nhận: <?= vnd($memberVnd) ?></div>
       <div class="task-meta">
         <?php if ($state === 'cool'): ?>
           <span class="pill warn">⏳ Chờ <?= $t['cooldown_remaining'] ?>s</span>
@@ -35,5 +34,6 @@
     </div>
   <?php endforeach; ?>
   </div>
-  <p class="muted hint">⚡ Tiền tự cộng qua hệ thống postback bảo mật — không cần báo admin. Nhiệm vụ có mã sẽ yêu cầu nhập mã tìm được.</p>
+  <p class="muted hint">⚡ Tiền tự cộng qua hệ thống postback bảo mật — không cần báo admin.</p>
+  <p class="muted hint">💡 Bấm “Bắt đầu” → nhiệm vụ mở ở tab mới → hoàn thành theo hướng dẫn → quay lại đây → tiền tự cộng trong ít phút.</p>
 <?php endif; ?>

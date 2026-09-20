@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="<?= e(App\Csrf::token()) ?>">
-<title><?= e($title ?? 'Admin — EarnMoney.VIP') ?></title>
+<title><?= e($title ?? 'Admin — HTXG.PRO') ?></title>
 <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body class="admin">
 <?php if (\App\AdminAuth::check()): ?>
 <header class="topbar">
-  <a class="brand" href="/admin">🛠 Admin<span>.VIP</span></a>
+  <a class="brand" href="/admin">🛠 Admin<span>.PRO</span></a>
   <nav>
     <a href="/admin">Tổng quan</a>
     <a href="/admin/users">Người dùng</a>

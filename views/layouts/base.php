@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="<?= e(App\Csrf::token()) ?>">
-<title><?= e($title ?? 'EarnMoney.VIP') ?></title>
+<title><?= e($title ?? 'HTXG.PRO — High-Traffic X-Gain') ?></title>
 <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/">💰 EarnMoney<span>.VIP</span></a>
+  <a class="brand" href="/">🚀 HTXG<span>.PRO</span></a>
   <nav>
     <?php if (App\Session::userId() !== null): ?>
       <a href="/dashboard">Tổng quan</a>

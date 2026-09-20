@@ -67,8 +67,8 @@ if ($sms_driver === 'telegram') {
     $sms_config = ['driver' => 'log'];
 }
 
-// --- Base URL (for links + webhook setup) ---
-$base_url = getenv('RENDER_EXTERNAL_URL') ?: getenv('BASE_URL') ?: 'https://earnmoney.vip';
+// Custom domain: BASE_URL override > RENDER_EXTERNAL_URL (onrender.com) > htxg.pro
+$base_url = getenv('BASE_URL') ?: getenv('RENDER_EXTERNAL_URL') ?: 'https://htxg.pro';
 
 // --- Postback token ---
 $postback_token = getenv('POSTBACK_TOKEN') ?: bin2hex(random_bytes(8));

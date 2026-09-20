@@ -17,6 +17,20 @@ namespace App;
  */
 final class Telegram
 {
+    /** Link xác thực dùng 1 lần, hết hạn sau 30 phút. */
+    public const TTL_SECONDS = 1800;
+
+    // Mã lý do trả về của /start — dùng để bot trả lời đúng vấn đề cho người dùng.
+    public const R_OK = 'ok';
+    public const R_ALREADY = 'already';
+    public const R_NO_PAYLOAD = 'no_payload';
+    public const R_BAD_TOKEN = 'bad_token';
+    public const R_TOKEN_USED = 'token_used';
+    public const R_EXPIRED = 'expired';
+    public const R_HAS_ACCOUNT = 'has_account';
+    public const R_TOO_MANY = 'too_many';
+    public const R_NO_SENDER = 'no_sender';
+
     public static function botToken(): string
     {
         // Ưu tiên env (Render: TELEGRAM_BOT_TOKEN), fallback config.php.
@@ -48,71 +62,101 @@ final class Telegram
             return null;
         }
         $token = bin2hex(random_bytes(24));
+        $expires = date('Y-m-d H:i:s', time() + self::TTL_SECONDS);
         Database::run(
             'INSERT INTO telegram_verify(token, phone, purpose, ip, created_at, expires_at) VALUES(?,?,?,?,?,?)',
-            [$token, $phone, $purpose, client_ip(), now(), date('Y-m-d H:i:s', time() + 900)]
+            [$token, $phone, $purpose, client_ip(), now(), $expires]
         );
-        return ['token' => $token, 'expires_at' => date('Y-m-d H:i:s', time() + 900)];
+        return ['token' => $token, 'expires_at' => $expires];
     }
 
     /** Called by webhook when the bot receives /start with our payload. */
     public static function handleStart(string $payload, array $from): bool
     {
+        return self::verifyStart($payload, $from) === self::R_OK;
+    }
+
+    /**
+     * Xác thực payload của /start. Trả về MÃ LÝ DO (R_*) để webhook trả lời đúng
+     * vấn đề cho người dùng (trước đây mọi lỗi đều nói "link không hợp lệ" nên rất khó hiểu).
+     */
+    public static function verifyStart(string $payload, array $from): string
+    {
         $payload = trim($payload);
-        if ($payload === '' || strlen($payload) > 64) {
-            return false;
+        if ($payload === '') {
+            // Người dùng tự mở bot / bấm START không qua link t?start=<token>.
+            return self::R_NO_PAYLOAD;
+        }
+        if (strlen($payload) > 64) {
+            return self::R_BAD_TOKEN;
         }
         $tgId = (string)($from['id'] ?? '');
         if ($tgId === '') {
-            return false;
+            return self::R_NO_SENDER;
+        }
+        $row = Database::one('SELECT * FROM telegram_verify WHERE token = ?', [$payload]);
+        if ($row === null) {
+            return self::R_BAD_TOKEN;
+        }
+        if ((string)$row['status'] === 'verified') {
+            // Idempotent: đã xác thực bởi đúng Telegram này.
+            return (string)($row['telegram_user_id'] ?? '') === $tgId ? self::R_ALREADY : self::R_TOKEN_USED;
         }
         // HARD RULE: 1 Telegram account = 1 website account.
         $bound = Database::one(
             'SELECT id, phone, status FROM users WHERE telegram_user_id = ? LIMIT 1',
             [$tgId]
         );
-        $row = Database::one('SELECT * FROM telegram_verify WHERE token = ?', [$payload]);
-        if ($row === null) {
-            return false;
-        }
         if ($bound !== null && (string)$bound['phone'] !== (string)$row['phone']) {
-            // This Telegram already owns a different account → reject + risk flag.
             Risk::event(
                 (int)$bound['id'],
                 'telegram_duplicate_bind',
                 'high',
                 'tg_user=' . $tgId . ' tried phone=' . $row['phone'] . ' but owns phone=' . $bound['phone']
             );
-            return false;
-        }
-        if ($row['status'] === 'verified') {
-            return true; // idempotent
+            return self::R_HAS_ACCOUNT;
         }
         if (strtotime((string)$row['expires_at']) < time()) {
-            return false;
+            return self::R_EXPIRED;
         }
         // Anti-abuse: one Telegram account verifies at most 3 different phones per day.
         $abuse = (int)Database::value(
             'SELECT COUNT(DISTINCT phone) FROM telegram_verify WHERE telegram_user_id = ? AND status = ? AND verified_at >= ?',
-            [(string)$from['id'], 'verified', date('Y-m-d H:i:s', time() - 86400)]
+            [$tgId, 'verified', date('Y-m-d H:i:s', time() - 86400)]
         );
-        if ($abuse >= 1) {
-            Risk::event(null, 'telegram_verify_abuse', 'medium', 'tg_user=' . $from['id'] . ' phones_today=' . $abuse);
-            return false;
+        if ($abuse >= 3) {
+            Risk::event(null, 'telegram_verify_abuse', 'medium', 'tg_user=' . $tgId . ' phones_today=' . $abuse);
+            return self::R_TOO_MANY;
         }
         // Excessive attempts → risk-flag the TG user (considered spam; user is banned site-wide).
         $attemptsToday = (int)Database::value(
             'SELECT COUNT(DISTINCT phone) FROM telegram_verify WHERE telegram_user_id = ? AND created_at >= ?',
-            [(string)$from['id'], date('Y-m-d H:i:s', time() - 86400)]
+            [$tgId, date('Y-m-d H:i:s', time() - 86400)]
         );
         if ($attemptsToday >= 10) {
-            Database::run("UPDATE users SET risk_flag = 1 WHERE telegram_user_id = ? AND risk_flag = 0", [(string)$from['id']]);
+            Database::run("UPDATE users SET risk_flag = 1 WHERE telegram_user_id = ? AND risk_flag = 0", [$tgId]);
         }
         Database::run(
             'UPDATE telegram_verify SET status = ?, telegram_user_id = ?, telegram_username = ?, verified_at = ? WHERE id = ?',
-            ['verified', (string)$from['id'], (string)($from['username'] ?? ''), now(), $row['id']]
+            ['verified', $tgId, (string)($from['username'] ?? ''), now(), $row['id']]
         );
-        return true;
+        return self::R_OK;
+    }
+
+    /** Câu trả lời trong chat theo mã lý do (tiếng Việt, có hướng dẫn cụ thể). */
+    public static function reasonMessage(string $reason): string
+    {
+        $mins = (int)round(self::TTL_SECONDS / 60);
+        return match ($reason) {
+            self::R_OK => "✅ Xác thực thành công!\n\nQuay lại trang web và bấm \"Tôi đã bấm START — kiểm tra ngay\" (hoặc chờ trang tự chuyển).",
+            self::R_ALREADY => "✅ Bạn đã xác thực rồi.\n\nQuay lại trang web để tiếp tục đăng ký.",
+            self::R_NO_PAYLOAD => "👋 Chào bạn!\n\nĐể xác thực, hãy QUAY LẠI TRANG WEB → Đăng ký → nhập số điện thoại → bấm \"Xác thực qua Telegram (miễn phí)\", rồi bấm nút \"🚀 Mở bot\" ở đó. Link đó có mã riêng cho từng lần đăng ký.",
+            self::R_EXPIRED => "⏰ Link đã hết hạn ({$mins} phút).\nQuay lại trang web và tạo link mới.",
+            self::R_HAS_ACCOUNT => "🚫 Telegram này đã gắn với một tài khoản khác.\nMỗi Telegram chỉ dùng cho 1 tài khoản — hãy dùng Telegram khác hoặc đăng nhập tài khoản cũ.",
+            self::R_TOO_MANY => "🚫 Telegram này đã xác thực cho quá nhiều số điện thoại trong 24 giờ.\nVui lòng thử lại sau.",
+            self::R_NO_SENDER => "❌ Không đọc được thông tin người gửi. Vui lòng thử lại.",
+            default => "❌ Link xác thực không hợp lệ hoặc đã được dùng.\nQuay lại trang web tạo link mới.",
+        };
     }
 
     /** Poll helper: status of a token for the website loop. */

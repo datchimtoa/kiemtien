@@ -41,6 +41,23 @@ curl -s -X POST "$B/api/telegram/webhook" -H 'Content-Type: application/json' \
   -o /tmp/wh.txt -w '  webhook HTTP %{http_code} body=%{size_download}B\n'
 echo "  Trạng thái row: $(j 'SELECT status,telegram_user_id FROM telegram_verify ORDER BY id DESC LIMIT 1')"
 
+echo "=============== 2b) Các trường hợp /start (bot phải nói rõ lý do) ==============="
+TG2=$(( TGID + 1 ))
+# a) /start trống (người dùng tự mở bot, không qua link)
+curl -s -o /dev/null -X POST "$B/api/telegram/webhook" -H 'Content-Type: application/json' \
+  -d "{\"message\":{\"chat\":{\"id\":$TG2},\"from\":{\"id\":$TG2,\"username\":\"tester\"},\"text\":\"/start\"}}"
+# b) token không tồn tại
+curl -s -o /dev/null -X POST "$B/api/telegram/webhook" -H 'Content-Type: application/json' \
+  -d "{\"message\":{\"chat\":{\"id\":$TG2},\"from\":{\"id\":$TG2,\"username\":\"tester\"},\"text\":\"/start khong_ton_tai_zzz\"}}"
+# c) token đã hết hạn
+php -r 'require "app/bootstrap.php"; App\Database::run("INSERT INTO telegram_verify(token,phone,purpose,ip,created_at,expires_at) VALUES(?,?,?,?,?,?)", ["expiredtoken123","84900000001","register","127.0.0.1",date("Y-m-d H:i:s",time()-7200),date("Y-m-d H:i:s",time()-3600)]);' 2>/dev/null
+curl -s -o /dev/null -X POST "$B/api/telegram/webhook" -H 'Content-Type: application/json' \
+  -d "{\"message\":{\"chat\":{\"id\":$TG2},\"from\":{\"id\":$TG2,\"username\":\"tester\"},\"text\":\"/start expiredtoken123\"}}"
+sleep 1
+grep -o '\[telegram\] /start token=[^ ]* chat=[0-9]* => [a-z_]*' /tmp/srv.log | tail -4 | sed 's/^/  /'
+echo "  Row token hết hạn vẫn pending: $(j "SELECT status FROM telegram_verify WHERE token = 'expiredtoken123'")"
+echo
+
 echo "=============== 3) Poll trạng thái (JS đang gọi) ==============="
 POLL=$(curl -s -b /tmp/cj.txt -c /tmp/cj.txt -X POST "$B/register/telegram-status" \
   -H "X-CSRF-Token: $TOK" --data-urlencode "_csrf=$TOK")

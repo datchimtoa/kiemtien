@@ -33,17 +33,12 @@ final class TelegramController
 
         if (preg_match('#^/start(?:\s+(\S+))?#', $text, $m)) {
             $payload = $m[1] ?? '';
-            if ($payload !== '' && Telegram::handleStart($payload, $from)) {
-                Telegram::sendMessage(
-                    $chatId,
-                    "✅ Xác thực thành công!\n\nQuay lại trang web và bấm \"Tôi đã xác thực\" để tiếp tục đăng ký."
-                );
-            } else {
-                Telegram::sendMessage(
-                    $chatId,
-                    "❌ Link xác thực không hợp lệ hoặc đã hết hạn (15 phút).\nVui lòng quay lại trang web và tạo link mới."
-                );
-            }
+            // Trả lời theo đúng lý do (link sai / hết hạn / Telegram đã có tài khoản / ...)
+            // để người dùng biết cần làm gì, thay vì luôn báo "link không hợp lệ".
+            $reason = Telegram::verifyStart($payload, $from);
+            error_log('[telegram] /start token=' . ($payload !== '' ? substr($payload, 0, 8) . '…' : '(trống)')
+                . ' chat=' . $chatId . ' => ' . $reason);
+            Telegram::sendMessage($chatId, Telegram::reasonMessage($reason));
             http_response_code(200);
             echo 'ok';
             return;

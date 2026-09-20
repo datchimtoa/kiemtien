@@ -3,7 +3,7 @@
 <input type="hidden" name="_csrf" value="<?= e(App\Csrf::token()) ?>">
 <ol class="muted" style="padding-left:18px;margin:0 0 12px">
   <li>Bấm nút dưới để mở Telegram, rồi bấm <b>START</b> trong bot.</li>
-  <li>Quay lại tab này — hệ thống tự phát hiện (link dùng 1 lần, hết hạn sau 15 phút).</li>
+  <li>Quay lại tab này — hệ thống tự phát hiện (link dùng 1 lần, hết hạn sau 30 phút).</li>
 </ol>
 <p><a class="btn btn-tg" href="<?= e($link) ?>" target="_blank" rel="noopener">🚀 Mở bot @<?= e($bot) ?></a></p>
 <p id="tg-status" class="muted">⏳ Đang chờ bạn bấm START trong Telegram...</p>

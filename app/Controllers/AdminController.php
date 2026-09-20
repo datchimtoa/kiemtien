@@ -318,12 +318,80 @@ final class AdminController
             . ', settings=' . (int)Database::value('SELECT COUNT(*) FROM settings'));
         $run('Telegram', static fn(): string => (Telegram::enabled() ? 'đã bật' : 'CHƯA BẬT (thiếu TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME)')
             . ' · bot=@' . (Telegram::botUsername() ?: '?'));
+        $run('Telegram webhook (bot có nhận update?)', static function (): string {
+            $i = Telegram::webhookInfo();
+            if ($i === null) {
+                return 'chưa bật bot → không kiểm tra được';
+            }
+            if (isset($i['error'])) {
+                return (string)$i['error'];
+            }
+            $s = 'url=' . ($i['url'] !== '' ? $i['url'] : '(CHƯA ĐẶT — bot sẽ không trả lời)')
+                . ' · đang chờ=' . $i['pending'];
+            if ($i['last_error'] !== '') {
+                $s .= ' · ⚠️ LỖI GẦN NHẤT: ' . $i['last_error'];
+            }
+            return $s;
+        });
 
         View::show('admin/diag', [
             'ok'      => $ok,
             'err'     => $err,
             'baseUrl' => (string)(config('base_url') ?? ''),
         ], 'admin');
+    }
+
+    /** Đặt lại webhook Telegram về BASE_URL hiện tại (1 click, không cần curl/Render Shell). */
+    public static function setTelegramWebhook(): void
+    {
+        AdminAuth::require();
+        Csrf::check();
+        if (!Telegram::enabled()) {
+            Session::flash('error', 'Bot Telegram chưa được cấu hình (thiếu TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME).');
+            redirect('/admin/diag');
+        }
+        $base = rtrim((string)(config('base_url') ?: getenv('RENDER_EXTERNAL_URL') ?: ''), '/');
+        if (!str_starts_with($base, 'https://')) {
+            Session::flash('error', 'BASE_URL chưa hợp lệ (cần bắt đầu bằng https://). Hiện tại: ' . ($base !== '' ? $base : '(trống)'));
+            redirect('/admin/diag');
+        }
+        $url = $base . '/api/telegram/webhook';
+        // Chốt an toàn: thử POST vào chính URL đó trước. Nếu bị redirect (apex htxg.pro → www)
+        // hoặc lỗi thì KHÔNG đặt, vì Telegram không đi theo redirect → bot sẽ im lặng.
+        $probe = self::probeWebhookUrl($url);
+        if ($probe['code'] !== 200) {
+            Session::flash('error', 'URL ' . $url . ' không dùng được: HTTP ' . $probe['code']
+                . ($probe['location'] !== '' ? ' → ' . $probe['location'] : '')
+                . '. Hãy dùng https://www.htxg.pro (apex htxg.pro bị redirect 307) rồi thử lại.');
+            redirect('/admin/diag');
+        }
+        $res = Telegram::setWebhook($url);
+        $json = json_decode((string)$res['resp'], true);
+        if ($res['http'] === 200 && is_array($json) && !empty($json['ok'])) {
+            Session::flash('success', 'Đã đặt webhook Telegram → ' . $url . ' (thử bấm START trong bot để kiểm tra)');
+        } else {
+            Session::flash('error', 'Đặt webhook thất bại (HTTP ' . $res['http'] . '): ' . (string)$res['resp']);
+        }
+        redirect('/admin/diag');
+    }
+
+    /** POST thử vào URL webhook: phát hiện redirect/domain lỗi trước khi đặt webhook thật. */
+    private static function probeWebhookUrl(string $url): array
+    {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => '{}',
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_FOLLOWLOCATION => false,
+        ]);
+        curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $loc = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+        unset($ch);
+        return ['code' => $code, 'location' => $loc];
     }
 
         public static function settings(): void

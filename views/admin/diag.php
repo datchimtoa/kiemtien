@@ -25,6 +25,16 @@
   <table class="kv">
     <tr><th>BASE_URL</th><td><code><?= e($baseUrl !== '' ? $baseUrl : '(trống)') ?></code></td></tr>
     <tr><th>Postback URL (dán vào PubCrypto)</th><td><code><?= e($baseUrl . '/postback/pubcrypto/' . (string)(config('postback_token') ?? '')) ?></code></td></tr>
-    <tr><th>Telegram webhook (setWebhook)</th><td><code><?= e($baseUrl . '/api/telegram/webhook') ?></code></td></tr>
+    <tr><th>Telegram webhook</th><td><code><?= e($baseUrl . '/api/telegram/webhook') ?></code></td></tr>
   </table>
+  <form method="post" action="/admin/diag/telegram-webhook" class="inline" style="margin:8px 0">
+    <?= App\Csrf::field() ?>
+    <button class="btn" type="submit">🔗 Đặt lại webhook Telegram về BASE_URL ở trên</button>
+  </form>
+  <p class="hint">
+    ⚠️ <b>Luôn dùng <code>www</code></b>: apex <code>htxg.pro</code> bị redirect <code>307</code> sang <code>www.htxg.pro</code>,
+    mà Telegram &amp; PubCrypto <b>không đi theo redirect khi POST</b> → webhook/postback sẽ mất.
+    Vì vậy BASE_URL và Postback URL phải là <code>https://www.htxg.pro/...</code>.
+  </p>
+  <p class="hint">Sau khi bấm nút trên: mở bot → bấm <b>START</b> → bot phải trả lời ngay. Nếu vẫn im lặng, xem dòng "Telegram webhook" ở bảng trên để biết lỗi thật.</p>
 </div>

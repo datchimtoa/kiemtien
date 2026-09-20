@@ -140,6 +140,29 @@ final class Telegram
         return $code === 200;
     }
 
+    /** Trạng thái webhook hiện tại (Telegram getWebhookInfo) hoặc null nếu chưa bật bot. */
+    public static function webhookInfo(): ?array
+    {
+        if (!self::enabled()) {
+            return null;
+        }
+        $ch = curl_init('https://api.telegram.org/bot' . self::botToken() . '/getWebhookInfo');
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
+        $resp = (string)curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        unset($ch);
+        $json = json_decode($resp, true);
+        if ($code !== 200 || !is_array($json) || empty($json['ok'])) {
+            return ['error' => 'getWebhookInfo failed (HTTP ' . $code . ')'];
+        }
+        $r = is_array($json['result'] ?? null) ? $json['result'] : [];
+        return [
+            'url'      => (string)($r['url'] ?? ''),
+            'pending'  => (int)($r['pending_update_count'] ?? 0),
+            'last_error' => (string)($r['last_error_message'] ?? ''),
+        ];
+    }
+
     /** Register the webhook (run after tunnel/domain change). */
     public static function setWebhook(string $url): array
     {

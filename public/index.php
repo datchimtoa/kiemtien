@@ -119,6 +119,7 @@ $handled = match (true) {
     $path === '/admin/settings'                && $method === 'POST' => AdminController::saveSettings(),
     $path === '/admin/audit'                   && $method === 'GET'  => AdminController::audit(),
     $path === '/admin/diag'                    && $method === 'GET'  => AdminController::diag(),
+    $path === '/admin/diag/telegram-webhook'   && $method === 'POST' => AdminController::setTelegramWebhook(),
     default => null,
 };
 if ($handled !== null) {

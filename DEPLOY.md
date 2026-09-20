@@ -89,6 +89,20 @@
    - PubCrypto Postback URL: `https://htxg.pro/postback/pubcrypto/<POSTBACK_TOKEN>`
 6. Kiểm tra: `curl -I https://htxg.pro/` → **200**. Nếu vẫn `521` → DNS chưa trỏ đúng hoặc proxy đang bật khi cert chưa cấp. Nếu `Not Found` → **chưa add domain trong Render**.
 
+### ⚠️ BẮT BUỘC dùng `www` cho webhook &amp; postback
+Hiện `https://htxg.pro/...` (apex) trả **301/307 redirect** sang `https://www.htxg.pro/...`, còn:
+- **Telegram webhook không đi theo redirect** → báo lỗi `Wrong response from the webhook: 307 Temporary Redirect` → bot **im lặng, không trả lời**.
+- **PubCrypto postback cũng vậy** → mất tiền hoa hồng của member.
+
+Vì vậy luôn dùng:
+| Thứ | URL đúng |
+|---|---|
+| BASE_URL | `https://www.htxg.pro` |
+| Telegram webhook | `https://www.htxg.pro/api/telegram/webhook` |
+| PubCrypto postback | `https://www.htxg.pro/postback/pubcrypto/<POSTBACK_TOKEN>` |
+
+Cách sửa nhanh không cần curl: **Admin → 🩺 Chẩn đoán** → xem dòng `Telegram webhook` (hiện URL + lỗi gần nhất) → bấm **“🔗 Đặt lại webhook Telegram về BASE_URL ở trên”**.
+
 ## 🐞 Sự cố đã gặp &amp; cách khắc phục
 
 ### 1) Đăng nhập báo `SQLSTATE[25P02] In failed sql transaction`

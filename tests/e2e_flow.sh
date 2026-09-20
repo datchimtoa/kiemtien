@@ -86,6 +86,13 @@ C4=$(curl -s -b /tmp/cja.txt -o /tmp/diag.html -w '%{http_code}' "$B/admin/diag"
 echo "  GET /admin/diag -> HTTP $C4"
 sed -e 's/<[^>]*>/ /g' /tmp/diag.html | tr -s ' \n' ' \n' | grep -A2 -iE 'Test transaction|Cột của rate_buckets|Driver DB|RateLimiter|Số bản ghi|Telegram' | head -30 | sed 's/^/  /'
 
+echo "=============== 8) Nut dat lai webhook Telegram (admin) ==============="
+curl -s -b /tmp/cja.txt "$B/admin/diag" -o /tmp/diag2.html
+TA=$(csrf /tmp/diag2.html)
+curl -s -b /tmp/cja.txt -c /tmp/cja.txt -o /tmp/wset.html -w '  POST /admin/diag/telegram-webhook -> HTTP %{http_code}\n' -X POST "$B/admin/diag/telegram-webhook" --data-urlencode "_csrf=$TA"
+grep -o 'class="flash[^"]*"[^<]*' /tmp/wset.html | head -1 | sed 's/^/  /'
+echo "  (token gia lap o local -> phai bao loi that bai, khong duoc 500)"
+
 echo "=============== log server (chỉ dòng lỗi) ==============="
 grep -iE 'fatal|\[db\]|\[schema\]|\[rate\]|Uncaught' /tmp/srv.log | head -20 | sed 's/^/  /'
 echo "(hết)"

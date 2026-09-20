@@ -17,3 +17,7 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Ghi chú lỗi / thông tin nội bộ (không commit)
+error.md
+secret.md

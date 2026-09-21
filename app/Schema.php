@@ -15,7 +15,7 @@ final class Schema
      * Tăng số này MỖI KHI thêm/bớt DDL, cột, index hoặc setting mặc định mới,
      * nếu không thay đổi sẽ không được áp dụng cho DB đã tồn tại.
      */
-    private const VERSION = '2026-09-20.2';
+    private const VERSION = '2026-09-21.1';
 
     /** Cờ đánh dấu rate_buckets đã đúng cấu trúc (tránh kiểm tra mỗi request). */
     private const FLAG_RATE_BUCKETS = 'rate_buckets_ok';

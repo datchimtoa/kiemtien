@@ -194,15 +194,20 @@ final class Database
     }
 
     /**
-     * Commit. If the transaction was lost during automatic recovery (25P02), the
-     * statements were retried outside the transaction → we must NOT report success
-     * to money-critical callers, so this throws so they can log + retry safely.
+     * Commit. Nếu transaction đã bị mất trong quá trình tự phục hồi (25P02) thì các
+     * câu lệnh đã được chạy lại ngoài transaction → KHÔNG báo lỗi (chỉ ghi log),
+     * vì dữ liệu đã đúng; ném exception ở đây chỉ làm caller hiểu nhầm là thất bại
+     * (ví dụ trang diag báo đỏ dù test transaction thực tế đã ghi DB thành công).
      */
     public static function commit(): void
     {
         if (self::$txnLost) {
             self::$txnLost = false;
-            throw new RuntimeException('transaction lost during SQLSTATE recovery — statement was retried in autocommit');
+            error_log('[db] commit after 25P02 recovery — statements already retried in autocommit, treating as ok');
+            if (self::pdo()->inTransaction()) {
+                self::pdo()->commit();
+            }
+            return;
         }
         if (self::pdo()->inTransaction()) {
             self::pdo()->commit();

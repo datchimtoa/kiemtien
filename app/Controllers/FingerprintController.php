@@ -24,7 +24,7 @@ final class FingerprintController
         }
         Session::set('_fp_hash', $fpHash);
         Session::set('_device_id', $deviceId);
-        App\Fingerprint::store(Session::userId(), $deviceId, $fpHash, $components);
+        Fingerprint::store(Session::userId(), $deviceId, $fpHash, $components);
         \App\json_response(['ok' => true]);
     }
 }

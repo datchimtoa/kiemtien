@@ -143,7 +143,7 @@ final class Risk
             }
         }
         if (!empty($user['register_fp'])) {
-            $othersFp = (int)Database::value('SELECT COUNT(DISTINCT user_id) FROM users WHERE register_fp = ? AND register_fp != "" AND id != ?', [$user['register_fp'], $userId]);
+            $othersFp = (int)Database::value("SELECT COUNT(DISTINCT user_id) FROM users WHERE register_fp = ? AND register_fp <> '' AND id <> ?", [$user['register_fp'], $userId]);
             if ($othersFp > 0) {
                 $score -= min(30, $othersFp * 15);
             }

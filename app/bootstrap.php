@@ -232,13 +232,40 @@ spl_autoload_register(static function (string $class): void {
 date_default_timezone_set((string)(config('timezone') ?: 'Asia/Ho_Chi_Minh'));
 ensure_storage();
 
+// Render/Docker chạy php -S: error_log của PHP mặc định đổ vào stderr → hiện ở tab Logs.
+// Nhưng nếu php.ini tắt log_errors hoặc display_errors bật (in lỗi ra HTML làm vỡ JSON/header),
+// lỗi sẽ "biến mất" khỏi Logs. Ép lại ở đây để mọi lỗi đều vào Logs.
+ini_set('log_errors', '1');
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+
+/**
+ * Ghi log vào file storage/logs/app.log (xem được qua /admin/diag mà không cần Render Logs).
+ * stderr trên Render free đôi khi bị mất khi instance restart → file này là bản sao lưu.
+ */
+if (!function_exists('app_log')) {
+    function app_log(string $tag, string $msg): void
+    {
+        $line = date('Y-m-d H:i:s') . " [{$tag}] " . $msg . "\n";
+        error_log($line);
+        try {
+            $f = STORAGE_PATH . '/logs/app.log';
+            if (is_dir(dirname($f))) {
+                file_put_contents($f, $line, FILE_APPEND | LOCK_EX);
+            }
+        } catch (\Throwable $e) {
+            // Không để ghi log làm sập request.
+        }
+    }
+}
+
 /**
  * Xử lý lỗi toàn cục: không bao giờ để người dùng thấy "Fatal error: Uncaught PDOException"
  * (lộ đường dẫn + chi tiết DB). Ghi log đầy đủ kèm mã lỗi và hiển thị trang thân thiện.
  */
 set_exception_handler(static function (\Throwable $e): void {
     $ref = strtoupper(bin2hex(random_bytes(4)));
-    error_log('[fatal] ref=' . $ref . ' ' . get_class($e) . ': ' . $e->getMessage()
+    app_log('fatal', 'ref=' . $ref . ' ' . get_class($e) . ': ' . $e->getMessage()
         . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n" . $e->getTraceAsString());
 
     $path = (string)(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
@@ -269,11 +296,38 @@ set_exception_handler(static function (\Throwable $e): void {
         . '<p><a style="color:#6ee7b7" href="/">← Về trang chủ</a></p></body></html>';
 });
 
+/** Bắt fatal error (hết memory, timeout...) — loại mà set_exception_handler không bắt được. */
+register_shutdown_function(static function (): void {
+    $err = error_get_last();
+    if (is_array($err) && in_array($err['type'] ?? 0, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        $ref = strtoupper(bin2hex(random_bytes(4)));
+        if (function_exists('app_log')) {
+            app_log('fatal', 'ref=' . $ref . ' SHUTDOWN ' . ($err['message'] ?? '')
+                . ' @ ' . ($err['file'] ?? '?') . ':' . ($err['line'] ?? 0));
+        }
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: text/html; charset=utf-8');
+        }
+        echo '<!doctype html><html lang="vi"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1"><title>Lỗi hệ thống</title></head>'
+            . '<body style="margin:0;padding:40px;background:#0f1115;color:#e8e8e8;font-family:system-ui,sans-serif">'
+            . '<h1 style="font-size:20px">⚠️ Hệ thống đang bận</h1>'
+            . '<p>Vui lòng thử lại sau vài giây.</p>'
+            . '<p>Mã lỗi: <code>' . $ref . '</code> — gửi mã này cho hỗ trợ để được kiểm tra.</p>'
+            . '<p><a style="color:#6ee7b7" href="/">← Về trang chủ</a></p></body></html>';
+    }
+});
+
 /** Warning/notice → log, không in ra HTML (tránh làm hỏng header/JSON). */
 set_error_handler(static function (int $no, string $msg, string $file = '', int $line = 0): bool {
     if (!(error_reporting() & $no)) {
         return false;
     }
-    error_log('[php] ' . $msg . ' @ ' . $file . ':' . $line);
+    if (function_exists('app_log')) {
+        app_log('php', $msg . ' @ ' . $file . ':' . $line);
+    } else {
+        error_log('[php] ' . $msg . ' @ ' . $file . ':' . $line);
+    }
     return true;
 });

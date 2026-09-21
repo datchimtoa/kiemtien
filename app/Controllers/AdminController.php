@@ -318,6 +318,15 @@ final class AdminController
             . ', settings=' . (int)Database::value('SELECT COUNT(*) FROM settings'));
         $run('Telegram', static fn(): string => (Telegram::enabled() ? 'đã bật' : 'CHƯA BẬT (thiếu TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_USERNAME)')
             . ' · bot=@' . (Telegram::botUsername() ?: '?'));
+        $run('Nhật ký lỗi gần nhất (không cần Render Logs)', static function (): string {
+            $f = STORAGE_PATH . '/logs/app.log';
+            if (!is_file($f)) {
+                return 'chưa có file log (chưa ghi lỗi nào kể từ khi deploy bản này)';
+            }
+            $lines = @file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+            $tail = array_slice($lines, -15);
+            return count($lines) . ' dòng — 15 dòng cuối: ' . implode(' ⏎ ', $tail);
+        });
         $run('Telegram webhook (bot có nhận update?)', static function (): string {
             $i = Telegram::webhookInfo();
             if ($i === null) {

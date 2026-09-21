@@ -14,17 +14,17 @@ final class FingerprintController
     {
         $in = json_decode((string)file_get_contents('php://input'), true);
         if (!is_array($in)) {
-            \App\json_response(['ok' => false, 'error' => 'bad json'], 400);
+            json_response(['ok' => false, 'error' => 'bad json'], 400);
         }
         $deviceId = substr((string)($in['device_id'] ?? ''), 0, 128);
         $fpHash = substr((string)($in['fp'] ?? ''), 0, 128);
         $components = (string)($in['components'] ?? '');
         if ($deviceId === '' || $fpHash === '') {
-            \App\json_response(['ok' => false, 'error' => 'missing fields'], 400);
+            json_response(['ok' => false, 'error' => 'missing fields'], 400);
         }
         Session::set('_fp_hash', $fpHash);
         Session::set('_device_id', $deviceId);
         Fingerprint::store(Session::userId(), $deviceId, $fpHash, $components);
-        \App\json_response(['ok' => true]);
+        json_response(['ok' => true]);
     }
 }

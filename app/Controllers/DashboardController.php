@@ -8,7 +8,6 @@ use App\RateUpdater;
 use App\Risk;
 use App\Session;
 use App\Settings;
-use App\TransactionPresenter;
 use App\View;
 use App\Wallet;
 use App\Withdrawals;

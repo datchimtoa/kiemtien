@@ -532,7 +532,31 @@ final class Schema
         // "INSERT OR IGNORE" là cú pháp SQLite. MySQL: INSERT IGNORE; Postgres: ON CONFLICT DO NOTHING.
         $now = now();
         $isPgsql = Database::isPgsql();
-        foreach ($defaults as $k => $v) {
+        // Admin login bootstrap từ ENV (chỉ khi bảng admin_users còn trống).
+    // Trên Render free không có shell: set ADMIN_USERNAME + ADMIN_PASSWORD trong
+    // Environment rồi deploy — request đầu tiên tự tạo admin, các request sau bỏ qua.
+    try {
+        $adminUser = (string)(getenv('ADMIN_USERNAME') ?: (string)(config('admin.username') ?? ''));
+        $adminPass = (string)(getenv('ADMIN_PASSWORD') ?: '');
+        $adminCount = (int)(Database::value('SELECT COUNT(*) FROM admin_users') ?? 0);
+        if ($adminUser !== '' && strlen($adminPass) >= 10 && $adminCount === 0) {
+            Database::run(
+                'INSERT INTO admin_users(username, password_hash, status, created_at) VALUES(?,?,?,?) '
+                . (Database::isPgsql()
+                    ? 'ON CONFLICT(username) DO NOTHING'
+                    : (Database::isSqlite()
+                        ? 'ON CONFLICT(username) DO NOTHING'
+                        : 'ON DUPLICATE KEY UPDATE username = VALUES(username)')),
+                [$adminUser, hash_password($adminPass), 'active', now()]
+            );
+            app_log('admin', 'bootstrap admin "' . $adminUser . '" tu ENV (bang admin_users dang trong)');
+        }
+    } catch (\Throwable $e) {
+        // Không để bootstrap admin làm sập request (DB chưa migrate xong...).
+        error_log('[admin] bootstrap skipped: ' . $e->getMessage());
+    }
+
+    foreach ($defaults as $k => $v) {
             try {
                 if (Database::isSqlite()) {
                     $pdo->prepare('INSERT OR IGNORE INTO settings(skey, svalue, updated_at) VALUES(?, ?, ?)')

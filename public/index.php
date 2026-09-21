@@ -87,6 +87,33 @@ if ($path === '/api/telegram/webhook' && $method === 'POST') {
     exit;
 }
 
+// ---------------------------------------------------------------- admin bootstrap (no session/CSRF)
+if ($path === '/admin/bootstrap' && $method === 'POST') {
+    $setupKey = (string)(getenv('SETUP_KEY') ?: (string)(config('setup_key') ?? ''));
+    $provided = (string)($_POST['setup_key'] ?? $_SERVER['HTTP_X_SETUP_KEY'] ?? '');
+    if ($setupKey === '' || !hash_equals($setupKey, $provided)) {
+        http_response_code(404);
+        exit('not found');
+    }
+    $username = trim((string)($_POST['username'] ?? ''));
+    $password = (string)($_POST['password'] ?? '');
+    if ($username === '' || strlen($password) < 10) {
+        http_response_code(400);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit('username + password(min 10 ky tu) bat buoc');
+    }
+    Database::run(
+        'INSERT INTO admin_users(username, password_hash, status, created_at) VALUES(?,?,?,?) '
+        . (Database::isPgsql() || Database::isSqlite()
+            ? 'ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, status = excluded.status'
+            : 'ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), status = VALUES(status)'),
+        [$username, hash_password($password), 'active', now()]
+    );
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'ok — admin "' . $username . '" da tao/cap nhat. XOA SETUP_KEY ngay va login tai /admin/login';
+    exit;
+}
+
 // ---------------------------------------------------------------- static route table
 $handled = match (true) {
     $path === '/'                              && $method === 'GET'  => HomeController::landing(),

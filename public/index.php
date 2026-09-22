@@ -65,6 +65,16 @@ if ($path === '/postback/pubcrypto' || str_starts_with($path, '/postback/pubcryp
         http_response_code(404);
         exit('not found');
     }
+    if ($method === 'GET') {
+        // PubCrypto redirect TRÌNH DUYỆT người dùng về URL postback sau khi claim
+        // (trong dashboard PubCrypto nhiều publisher dán chung 1 URL cho cả S2S và Return).
+        // GET không phải postback thật → không xử lý tiền, đưa user về trang nhiệm vụ.
+        if (Session::userId() !== null) {
+            Session::flash('success', '✅ Nhiệm vụ đã hoàn tất — phần thưởng sẽ tự cộng vào ví trong ít phút.');
+            redirect('/tasks');
+        }
+        redirect('/');
+    }
     if ($method !== 'POST') {
         http_response_code(405);
         exit('method not allowed');

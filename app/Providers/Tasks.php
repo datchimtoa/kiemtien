@@ -63,10 +63,21 @@ final class Tasks
             $ipCount = (int)Database::value("SELECT COUNT(*) FROM provider_attempts WHERE provider = ? AND ip = ? AND created_at >= ? AND status <> 'creation_failed'", [$provider, $ip, $since]);
             $hourCount = (int)Database::value('SELECT COUNT(*) FROM provider_attempts WHERE user_id = ? AND created_at >= ?', [$userId, date('Y-m-d H:i:s', time() - 3600)]);
             $last = Database::value('SELECT MAX(created_at) FROM provider_attempts WHERE user_id = ?', [$userId]);
-            if ($userCount >= self::setting($provider, 'daily_limit') || $ipCount >= self::setting($provider, 'ip_daily_limit')
-                || $hourCount >= Settings::getInt('task_max_completions_per_hour', 30)
-                || ($last && time() - strtotime((string)$last) < max(1, Settings::getInt('task_click_cooldown_seconds', 20)))) {
-                throw new \RuntimeException('Đã đạt giới hạn hoặc đang trong thời gian chờ.');
+            $dailyLimit = self::setting($provider, 'daily_limit');
+            $ipLimit = self::setting($provider, 'ip_daily_limit');
+            $hourLimit = Settings::getInt('task_max_completions_per_hour', 30);
+            if ($userCount >= $dailyLimit) {
+                throw new \RuntimeException("Tài khoản đã dùng {$userCount}/{$dailyLimit} lượt của nguồn này trong 24 giờ gần nhất. Lượt lỗi sau khi gửi yêu cầu vẫn giữ chỗ; cần admin đối soát, không tự đặt lại lúc 0 giờ.");
+            }
+            if ($ipCount >= $ipLimit) {
+                throw new \RuntimeException("IP hiện tại đã dùng {$ipCount}/{$ipLimit} lượt của nguồn này trong 24 giờ gần nhất (tính cả tài khoản dùng chung IP). Vui lòng chờ lượt cũ hết hạn hoặc liên hệ admin đối soát.");
+            }
+            if ($hourCount >= $hourLimit) {
+                throw new \RuntimeException("Đã đạt giới hạn {$hourCount}/{$hourLimit} lần bắt đầu trong 60 phút gần nhất, tính cả lần tạo lỗi để chống spam. Vui lòng chờ lượt cũ ra khỏi khung 60 phút.");
+            }
+            $wait = $last ? max(1, Settings::getInt('task_click_cooldown_seconds', 20)) - (time() - strtotime((string)$last)) : 0;
+            if ($wait > 0) {
+                throw new \RuntimeException("Vui lòng chờ thêm {$wait} giây trước khi bắt đầu nhiệm vụ tiếp theo (kể cả lần tạo trước bị lỗi).");
             }
             Database::run('INSERT INTO provider_attempts(token,user_id,provider,service,status,reward_vnd,share_percent,min_seconds,ip,device_hash,destination,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', [
                 $token, $userId, $provider, $service, 'creating', $reward,

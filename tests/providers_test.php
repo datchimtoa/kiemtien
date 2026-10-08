@@ -238,5 +238,18 @@ check('released user and IP slot allows successful retry', Database::value('SELE
 age($quotaJob['token']);
 rejects('successful reservation still consumes daily slot', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
 check('released and pending attempts do not pay without proof', Wallet::balance($quotaUser) === 0);
+function rejectsWith(string $name, callable $fn, string $message): void {
+    try { $fn(); check($name, false); } catch (RuntimeException $e) { check($name, str_contains($e->getMessage(), $message)); }
+}
+rejectsWith('daily block identifies account usage', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'Tài khoản đã dùng 1/1');
+Settings::set('provider_yeujob_daily_limit', '100');
+rejectsWith('daily block identifies shared IP usage', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'IP hiện tại đã dùng 1/1');
+Settings::set('provider_yeujob_ip_daily_limit', '100');
+Settings::set('task_max_completions_per_hour', '2');
+rejectsWith('hourly block includes failed attempts', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), '2/2 lần bắt đầu trong 60 phút');
+Settings::set('task_max_completions_per_hour', '30');
+Database::run('UPDATE provider_attempts SET created_at = ? WHERE token = ?', [now(), $quotaJob['token']]);
+rejectsWith('cooldown block reports remaining seconds', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'giây trước khi bắt đầu');
+check('diagnostic blocks do not reserve additional attempts', (int)Database::value('SELECT COUNT(*) FROM provider_attempts WHERE user_id = ?', [$quotaUser]) === 2);
 Http::fake(null);
 exit($failures === 0 ? 0 : 1);

@@ -107,7 +107,9 @@ Http::fake(function ($method, $url, $opt) {
     check('YeuJob V2 uses st without V1 list or accept', $method === 'GET'
         && parse_url($url, PHP_URL_PATH) === '/st' && ($query['api'] ?? '') === 'test-key'
         && str_starts_with($query['url'] ?? '', 'https://example.test/task/return/'));
-    check('V2 uses standalone request profile without body or custom user agent', !isset($opt['body']) && ($opt['user_agent'] ?? null) === '');
+    check('V2 requests JSON with an identified client and no body', !isset($opt['body'])
+        && ($opt['user_agent'] ?? null) === 'EarnMoneyVIP/1.0 (YeuJob API client)'
+        && ($opt['headers'] ?? []) === ['Accept: application/json']);
     return ['body' => json_encode(['success' => true, 'shortenedUrl' => 'https://yeujob.com/q/job-456'])];
 });
 $job = Tasks::start($uid, 'yeujob', 'friend'); age($job['token']);

@@ -47,7 +47,8 @@ final class Catalog
                 'shorten' => [
                     'method' => 'GET',
                     'url' => 'https://yeujob.com/st',
-                    'user_agent' => '', // Match the standalone bodyless cURL GET.
+                    'user_agent' => 'EarnMoneyVIP/1.0 (YeuJob API client)',
+                    'headers' => ['Accept: application/json'],
                     'query' => ['api' => '{key}', 'url' => '{url}'],
                     'ok' => 'success',
                     'result' => ['shortenedUrl', 'data.shortenedUrl'],

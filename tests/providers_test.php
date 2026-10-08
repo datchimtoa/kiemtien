@@ -107,10 +107,13 @@ Http::fake(function ($method, $url, $opt) {
     check('YeuJob V2 uses st without V1 list or accept', $method === 'GET'
         && parse_url($url, PHP_URL_PATH) === '/st' && ($query['api'] ?? '') === 'test-key'
         && str_starts_with($query['url'] ?? '', 'https://example.test/task/return/'));
+    check('V2 uses standalone request profile without body or custom user agent', !isset($opt['body']) && ($opt['user_agent'] ?? null) === '');
     return ['body' => json_encode(['success' => true, 'shortenedUrl' => 'https://yeujob.com/q/job-456'])];
 });
 $job = Tasks::start($uid, 'yeujob', 'friend'); age($job['token']);
 Tasks::returned($uid, $job['token']);
+check('V2 return records review marker and keeps pending', Database::value('SELECT returned_at FROM provider_attempts WHERE token = ?', [$job['token']]) !== null
+    && Database::value('SELECT status FROM provider_attempts WHERE token = ?', [$job['token']]) === 'pending');
 Http::fake(function () { throw new RuntimeException('V2 must not poll V1'); });
 check('V2 return and poll never pay', !Tasks::poll($uid, $job['token']) && Wallet::balance($uid) === 550);
 check('V2 rejects API and callback credit', !Tasks::credit($job['token'], 'provider_api') && !Tasks::credit($job['token'], 'signed_callback', 'yeujob'));

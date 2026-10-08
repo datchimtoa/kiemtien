@@ -47,6 +47,7 @@ final class Catalog
                 'shorten' => [
                     'method' => 'GET',
                     'url' => 'https://yeujob.com/st',
+                    'user_agent' => '', // Match the standalone bodyless cURL GET.
                     'query' => ['api' => '{key}', 'url' => '{url}'],
                     'ok' => 'success',
                     'result' => ['shortenedUrl', 'data.shortenedUrl'],

@@ -40,6 +40,9 @@ $data['providerAttempts'] = [[
     'short_url' => 'https://yeujob.com/q/test',
 ]];
 $html = View::render('tasks/index', $data, null);
+$check('V2 before return shows in progress without polling', str_contains($html, 'Đang làm nhiệm vụ') && !str_contains($html, 'Kiểm tra xác nhận'));
+$data['providerAttempts'][0]['returned_at'] = now();
+$html = View::render('tasks/index', $data, null);
 $check('V2 pending shows manual review without poll button', str_contains($html, 'Chờ admin duyệt') && !str_contains($html, 'Kiểm tra xác nhận'));
 $data['providerAttempts'] = [];
 $data['providerAttempts'] = [[

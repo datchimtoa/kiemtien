@@ -47,7 +47,7 @@ final class ProviderController
         header('Referrer-Policy: no-referrer');
         try {
             Tasks::returned((int)$user['id'], $token);
-            Session::flash('info', 'Đã ghi nhận quay lại. Chưa cộng tiền: cần xác nhận từ nhà cung cấp hoặc admin.');
+            Session::flash('info', 'Đã ghi nhận quay lại. Nhiệm vụ đang chờ xác nhận hoặc admin đối chiếu và duyệt thưởng; chưa cộng tiền.');
         } catch (\Throwable $e) {
             \App\Risk::event((int)$user['id'], 'provider_return_invalid', 'medium', substr($e->getMessage(), 0, 200));
             Session::flash('error', $e->getMessage());

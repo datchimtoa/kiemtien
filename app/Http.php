@@ -19,7 +19,7 @@ final class Http
     }
 
     /**
-     * @param array{headers?:array<int,string>,body?:mixed,json?:bool,timeout?:int} $opt
+     * @param array{headers?:array<int,string>,body?:mixed,json?:bool,timeout?:int,user_agent?:string} $opt
      * @return array{ok:bool,http:int,body:string,error:string}
      */
     public static function request(string $method, string $url, array $opt = []): array
@@ -58,13 +58,17 @@ final class Http
             CURLOPT_CONNECTTIMEOUT => 6,
             CURLOPT_CUSTOMREQUEST  => strtoupper($method),
             CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; HTXG.PRO/1.0; +https://www.htxg.pro)',
+            CURLOPT_USERAGENT      => $opt['user_agent'] ?? 'Mozilla/5.0 (compatible; HTXG.PRO/1.0; +https://www.htxg.pro)',
         ]);
+        // Setting POSTFIELDS (even null) changes cURL's request construction.
+        // A bodyless GET must not be configured as a form submission.
+        if ($body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
         $resp = curl_exec($ch);
         $err = (string)curl_error($ch);
         $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
+        unset($ch);
 
         if ($resp === false) {
             return ['ok' => false, 'http' => 0, 'body' => '', 'error' => $err !== '' ? 'curl: ' . $err : 'request failed'];

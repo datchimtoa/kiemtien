@@ -21,6 +21,9 @@ final class Client
         $url = preg_replace_callback('/\{([a-z_]+)\}/', static fn($m) => rawurlencode((string)($vars[$m[1]] ?? '')), $spec['url']);
         $query = array_map($replace, $spec['query'] ?? []);
         $opt = ['headers' => array_map($replace, $spec['headers'] ?? [])];
+        if (isset($spec['user_agent'])) {
+            $opt['user_agent'] = (string)$spec['user_agent'];
+        }
         if (isset($spec['json_body']) || isset($spec['body'])) {
             $opt['body'] = array_map($replace, $spec['json_body'] ?? $spec['body']);
             $opt['json'] = isset($spec['json_body']);

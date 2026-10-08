@@ -62,8 +62,12 @@ if (!function_exists('vnd')) {
 if (!function_exists('client_ip')) {
     function client_ip(): string
     {
-        // Behind Cloudflare/tunnel: trust the edge-provided client IP.
-        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR'] as $h) {
+        // Forwarded IPs are attacker-controlled unless the immediate peer is trusted.
+        $peer = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+        $trusted = config('trusted_proxy_ips', []);
+        $headers = is_array($trusted) && in_array($peer, $trusted, true)
+            ? ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR'] : [];
+        foreach ($headers as $h) {
             if (!empty($_SERVER[$h])) {
                 $first = trim(explode(',', (string)$_SERVER[$h])[0]);
                 if (filter_var($first, FILTER_VALIDATE_IP)) {

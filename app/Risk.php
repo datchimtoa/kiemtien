@@ -234,11 +234,13 @@ final class Risk
         try {
             $tables = [
                 'transactions', 'withdrawals', 'user_ips', 'devices',
-                'fingerprints', 'risk_events', 'audit_log', 'otp_codes',
+                'fingerprints', 'risk_events', 'auth_events',
             ];
             foreach ($tables as $t) {
                 Database::run("DELETE FROM {$t} WHERE user_id = ?", [$userId]);
             }
+            Database::run("DELETE FROM audit_log WHERE actor_type = 'user' AND actor_id = ?", [$userId]);
+            Database::run('DELETE FROM otp_codes WHERE phone = (SELECT phone FROM users WHERE id = ?)', [$userId]);
             // Remove task_clicks
             Database::run('DELETE FROM task_clicks WHERE user_id = ?', [$userId]);
             // Remove telegram_verify for this user's phone

@@ -21,6 +21,8 @@ final class TaskController
         View::show('tasks/index', [
             'user'   => $user,
             'res'    => $res,
+            'providers' => \App\Providers\Catalog::definitions(),
+            'providerAttempts' => Database::all('SELECT * FROM provider_attempts WHERE user_id = ? ORDER BY id DESC LIMIT 30', [(int)$user['id']]),
             'clickCooldown' => (int)\App\Settings::get('task_click_cooldown_seconds', '20'),
         ], 'member');
     }

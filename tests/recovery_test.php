@@ -9,6 +9,11 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/app/bootstrap.php';
 
+// Never mutate a developer's or production database from regression tests.
+config('db');
+$GLOBALS['__config']['db'] = ['driver' => 'sqlite', 'sqlite' => ':memory:'];
+App\Database::migrate();
+
 use App\Database;
 
 $fail = 0;
@@ -52,12 +57,16 @@ $check('rollbackQuietly() khi transaction đang mở', (static function (): bool
     Database::rollbackQuietly();
     return Database::inTransaction() === false;
 })());
-$check('begin() dọn transaction treo trước đó', (static function (): bool {
-    Database::begin();      // transaction 1
-    Database::begin();      // phải tự dọn rồi mở lại, không được ném lỗi
-    $ok = Database::inTransaction();
-    Database::rollback();
-    return $ok;
+$check('nested begin() không được rollback dữ liệu của caller', (static function (): bool {
+    Database::begin();
+    try {
+        Database::begin();
+        return false;
+    } catch (RuntimeException $e) {
+        return Database::inTransaction();
+    } finally {
+        Database::rollback();
+    }
 })());
 
 echo "3) RateLimiter fail-open + ghi hit\n";

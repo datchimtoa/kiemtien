@@ -1,6 +1,39 @@
 <div class="page-head">
   <h2>🎯 Nhiệm vụ kiếm tiền</h2>
 </div>
+<div class="card">
+  <h3>Nhiệm vụ từ đối tác</h3>
+  <p class="hint">Không cộng tiền chỉ vì quay lại. Phần thưởng chờ xác nhận API / postback có chữ ký hoặc admin kiểm tra. Không dùng nhiều tài khoản, chia sẻ link hay bỏ qua các bước.</p>
+  <?php foreach ($providers as $providerId => $definition):
+    if (\App\Settings::getInt('provider_' . $providerId . '_enabled') !== 1) continue; ?>
+    <h4><?= e($definition['label']) ?></h4>
+    <?php foreach ($definition['services'] as $service): if ($service['id'] === 'no_ads') continue;
+      $reward = \App\Settings::getInt('provider_' . $providerId . '_service_' . $service['id'] . '_reward_vnd', \App\Providers\Tasks::setting($providerId, 'reward_vnd')); ?>
+      <form method="post" action="/tasks/provider/start" class="stack">
+        <?= \App\Csrf::field() ?>
+        <input type="hidden" name="provider" value="<?= e($providerId) ?>">
+        <input type="hidden" name="service" value="<?= e($service['id']) ?>">
+        <button class="btn" type="submit"><?= e($service['label']) ?> · <?= $reward > 0 ? vnd($reward) : e(\App\Providers\Tasks::setting($providerId, 'share_percent') . '% thưởng job') ?></button>
+      </form>
+    <?php endforeach; ?>
+  <?php endforeach; ?>
+</div>
+<?php if ($providerAttempts): ?>
+<div class="card">
+  <h3>Lượt nhiệm vụ đối tác gần đây</h3>
+  <?php foreach ($providerAttempts as $attempt): ?>
+    <p>#<?= (int)$attempt['id'] ?> · <?= e($attempt['provider']) ?> / <?= e($attempt['service']) ?> · <?= vnd($attempt['reward_vnd']) ?> · <?= e($attempt['status']) ?></p>
+    <?php if ($attempt['status'] === 'pending'): ?>
+      <form method="post" action="/tasks/provider/verify">
+        <?= \App\Csrf::field() ?>
+        <input type="hidden" name="token" value="<?= e($attempt['token']) ?>">
+        <button class="btn" type="submit">Kiểm tra xác nhận</button>
+        <?php if ($attempt['short_url']): ?><a href="<?= e($attempt['short_url']) ?>" rel="noreferrer">Tiếp tục nhiệm vụ</a><?php endif; ?>
+      </form>
+    <?php endif; ?>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 <?php if (!$res['ok']): ?>
   <div class="card"><div class="flash error"><?= e($res['error']) ?></div></div>
 <?php else: ?>

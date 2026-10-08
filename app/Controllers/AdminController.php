@@ -11,6 +11,7 @@ use App\RateLimiter;
 use App\RateUpdater;
 use App\Risk;
 use App\Session;
+use App\Settings;
 use App\Telegram;
 use App\View;
 use App\Wallet;
@@ -403,7 +404,7 @@ final class AdminController
         return ['code' => $code, 'location' => $loc];
     }
 
-        public static function settings(): void
+    public static function settings(): void
     {
         AdminAuth::require();
         $rate = RateUpdater::currentRate();
@@ -417,10 +418,10 @@ final class AdminController
     private const EDITABLE_SETTINGS = [
         'site_name', 'maintenance',
         'pubcrypto_site_key', 'pubcrypto_api_key', 'pubcrypto_forward_secret', 'pubcrypto_api_base', 'pubcrypto_task_cache_ttl',
-        'usd_to_vnd_rate', 'site_member_share_percent',
+        'site_member_share_percent',
         'min_withdraw_vnd', 'max_withdraw_vnd', 'daily_withdraw_limit_vnd', 'withdraw_fee_percent',
         'withdraw_min_account_age_days', 'withdraw_daily_count_limit', 'withdraw_bank_list',
-        'withdraw_review_days', 'usd_rate_auto',
+        'withdraw_review_days',
         'sms_http_url', 'sms_http_method', 'sms_http_headers', 'sms_http_body_template', 'sms_sender',
         'anticheat_enabled', 'max_accounts_per_ip', 'max_accounts_per_fp',
         'task_click_cooldown_seconds', 'task_max_completions_per_hour', 'postback_max_reward_vnd',
@@ -431,6 +432,15 @@ final class AdminController
     {
         AdminAuth::require();
         Csrf::check();
+        try {
+            $providerValues = \App\Providers\Configuration::validate($_POST);
+        } catch (\InvalidArgumentException $e) {
+            Session::flash('error', $e->getMessage());
+            redirect('/admin/settings');
+        }
+        foreach ($providerValues as $key => $value) {
+            Settings::set($key, $value);
+        }
         foreach ($_POST as $key => $value) {
             if (!in_array($key, self::EDITABLE_SETTINGS, true) || !is_string($value)) {
                 continue;

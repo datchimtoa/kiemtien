@@ -19,7 +19,7 @@ final class Wallet
     /** Convert postback USD value to member VND credit. */
     public static function usdToVnd(float $usd): int
     {
-        $rate = Settings::getFloat('usd_to_vnd_rate', 26000.0);
+        $rate = RateUpdater::FIXED_RATE;
         $share = max(0, min(100, Settings::getInt('site_member_share_percent', 100)));
         return (int)floor($usd * $rate * $share / 100);
     }
@@ -40,16 +40,21 @@ final class Wallet
         int $amountVnd,
         array $meta = []
     ): int {
-        Database::begin();
+        $ownsTransaction = !Database::inTransaction();
+        if ($ownsTransaction) {
+            Database::begin();
+        }
         try {
             $lock = Database::isSqlite() ? '' : ' FOR UPDATE';
             $row = Database::one('SELECT balance_vnd, points_total FROM users WHERE id = ?' . $lock, [$userId]);
             if ($row === null) {
-                Database::rollback();
                 throw new \RuntimeException('user not found: ' . $userId);
             }
             $newBalance = (int)$row['balance_vnd'] + $amountVnd;
             if ($newBalance < 0) {
+                if ($type !== self::TYPE_TASK_CHARGEBK) {
+                    throw new \RuntimeException('Insufficient balance');
+                }
                 // Clamp at zero for chargebacks that exceed current balance.
                 $amountVnd = -1 * (int)$row['balance_vnd'];
                 $newBalance = 0;
@@ -64,7 +69,9 @@ final class Wallet
             if ($transId !== '') {
                 $dupe = Database::one('SELECT id FROM transactions WHERE trans_id = ?', [$transId]);
                 if ($dupe !== null) {
-                    Database::rollback();
+                    if ($ownsTransaction) {
+                        Database::rollback();
+                    }
                     // Duplicate — treat as no-op, return current balance.
                     return (int)$row['balance_vnd'];
                 }
@@ -89,10 +96,14 @@ final class Wallet
                     now(),
                 ]
             );
-            Database::commit();
+            if ($ownsTransaction) {
+                Database::commit();
+            }
             return $newBalance;
         } catch (\Throwable $e) {
-            Database::rollback();
+            if ($ownsTransaction) {
+                Database::rollback();
+            }
             throw $e;
         }
     }

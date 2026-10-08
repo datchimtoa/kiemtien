@@ -127,9 +127,8 @@ final class Database
     /**
      * Run a statement with params. Returns PDOStatement.
      *
-     * Tự phục hồi khi transaction bị "aborted" (SQLSTATE 25P02): rollback câu lệnh
-     * đang treo rồi chạy lại 1 lần. Nhờ vậy 1 lỗi ở chỗ khác không làm chết cả
-     * request phía sau (trước đây login trả về fatal error 500).
+     * Retry recoverable failures only outside a transaction. Inside a transaction,
+     * rollback and propagate so callers cannot accidentally commit partial work.
      */
     public static function run(string $sql, array $params = []): \PDOStatement
     {
@@ -143,13 +142,16 @@ final class Database
             }
             $state = (string)($e->errorInfo[0] ?? $e->getCode());
             $wasInTxn = self::inTransaction();
-            // Ghi lại lỗi thật để đọc được trong log Render (trước đây bị nuốt im lặng).
+            // Never replay one statement from a multi-statement transaction in autocommit.
+            // The caller must retry the WHOLE operation after rollback.
+            if ($wasInTxn) {
+                self::$txnLost = true;
+                self::rollbackQuietly();
+                throw $e;
+            }
             error_log('[db] ' . $state . ' (' . $e->getMessage() . ') on: ' . self::shortSql($sql)
                 . ' — rollback + retry once' . ($wasInTxn ? ' (transaction was open)' : ''));
             self::rollbackQuietly();
-            if ($wasInTxn) {
-                self::$txnLost = true;
-            }
             $stmt = self::pdo()->prepare($sql);
             $stmt->execute($params);
             return $stmt;
@@ -183,31 +185,22 @@ final class Database
         return (int)self::pdo()->lastInsertId();
     }
 
-    /** Begin a transaction, cleaning up any stale/aborted one left by an earlier failure. */
+    /** Begin a transaction. Nested callers must explicitly join their caller's transaction. */
     public static function begin(): void
     {
-        self::$txnLost = false;
         if (self::pdo()->inTransaction()) {
-            self::rollbackQuietly();
+            throw new RuntimeException('Nested transaction would discard uncommitted work');
         }
+        self::$txnLost = false;
         self::pdo()->beginTransaction();
     }
 
-    /**
-     * Commit. Nếu transaction đã bị mất trong quá trình tự phục hồi (25P02) thì các
-     * câu lệnh đã được chạy lại ngoài transaction → KHÔNG báo lỗi (chỉ ghi log),
-     * vì dữ liệu đã đúng; ném exception ở đây chỉ làm caller hiểu nhầm là thất bại
-     * (ví dụ trang diag báo đỏ dù test transaction thực tế đã ghi DB thành công).
-     */
+    /** Commit, refusing to report success after recovery rolled back the work. */
     public static function commit(): void
     {
         if (self::$txnLost) {
             self::$txnLost = false;
-            error_log('[db] commit after 25P02 recovery — statements already retried in autocommit, treating as ok');
-            if (self::pdo()->inTransaction()) {
-                self::pdo()->commit();
-            }
-            return;
+            throw new RuntimeException('Transaction was rolled back; retry the entire operation');
         }
         if (self::pdo()->inTransaction()) {
             self::pdo()->commit();

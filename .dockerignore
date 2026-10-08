@@ -2,6 +2,8 @@
 config.php
 storage/
 secret.md
+add.md
+error.md
 .git/
 .gitignore
 .dockerignore

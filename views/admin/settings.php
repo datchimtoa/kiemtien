@@ -3,10 +3,10 @@
   <table class="kv">
     <tr><th>Tỉ giá USD→VND hiện tại</th><td><b class="hl"><?= number_format($rateInfo['rate'], 0, ',', '.') ?>₫</b></td></tr>
     <tr><th>Cập nhật lúc</th><td><?= e($rateInfo['updated_at'] ?: 'Chưa có') ?></td></tr>
-    <tr><th>Chế độ</th><td><?= $rateInfo['auto'] ? '<span class="pill ok">Tự động (mỗi 6h)</span>' : '<span class="pill warn">Thủ công</span>' ?></td></tr>
+    <tr><th>Chế độ</th><td><span class="pill ok">Cố định 24.000 VND/USDT</span></td></tr>
     <tr><th>% chia cho member</th><td><?= (int)$rateInfo['member_share'] ?>%</td></tr>
   </table>
-  <p class="hint">Tỉ giá tự động cập nhật từ open.er-api.com mỗi 6 giờ khi bật chế độ tự động. Khi thay đổi % chia cho member, điểm số sẽ tự động cập nhật theo.</p>
+  <p class="hint">Tỷ giá quy đổi cố định, không gọi API thị trường. PubCrypto reward_pb đã là VND cuối cho thành viên và không được quy đổi hay chia phần trăm lần nữa.</p>
   <p class="hint">Ví dụ: 1 USD = <?= number_format($rateInfo['rate'], 0, ',', '.') ?>₫ → nếu member được <?= (int)$rateInfo['member_share'] ?>%, với nhiệm vụ trị giá $0.08 → member nhận <?= vnd((int)floor(0.08 * $rateInfo['rate'] * $rateInfo['member_share'] / 100)) ?>.</p>
 </div>
 
@@ -32,7 +32,7 @@
   </div>
   <div class="card">
     <h3>Kinh tế</h3>
-    <label>Tỷ giá USD→VND<input name="usd_to_vnd_rate" type="number" value="<?= e($settings['usd_to_vnd_rate'] ?? '26000') ?>"></label>
+    <p>Tỷ giá cố định: 1 USDT/USD = <?= vnd(\App\RateUpdater::FIXED_RATE) ?>. Không tự cập nhật theo thị trường.</p>
     <label>% chia cho thành viên (0-100)<input name="site_member_share_percent" type="number" min="0" max="100" value="<?= e($settings['site_member_share_percent'] ?? '100') ?>"></label>
     <label>Rút tối thiểu (VND)<input name="min_withdraw_vnd" type="number" value="<?= e($settings['min_withdraw_vnd'] ?? '') ?>"></label>
     <label>Rút tối đa/lần (VND)<input name="max_withdraw_vnd" type="number" value="<?= e($settings['max_withdraw_vnd'] ?? '') ?>"></label>
@@ -68,6 +68,29 @@
     <label class="check"><input type="checkbox" name="login_new_device_otp" value="1" <?= ($settings['login_new_device_otp'] ?? '1') === '1' ? 'checked' : '' ?>> OTP khi đăng nhập thiết bị mới</label>
     <label>Thời gian điền form tối thiểu (giây)<input name="min_form_seconds" type="number" value="<?= e($settings['min_form_seconds'] ?? '3') ?>"></label>
   </div>
+  </div>
+  <div class="card">
+    <h3>Nguồn nhiệm vụ &amp; thù lao</h3>
+    <p><a href="/admin/providers">Xem và duyệt nhiệm vụ provider</a></p>
+    <p class="hint">Quay lại trình duyệt không phải bằng chứng hoàn thành. Chỉ YeuJob (approved + paid) và Traffic24h (views_valid) có xác minh tự động trong tài liệu hiện tại. Các nguồn còn lại chờ admin kiểm tra doanh thu/bằng chứng. XTASK thiếu định dạng phản hồi status. Không cộng thưởng theo timer.</p>
+    <?php foreach (\App\Providers\Catalog::definitions() as $providerId => $definition):
+        $prefix = 'provider_' . $providerId . '_'; ?>
+      <fieldset>
+        <legend><?= e($definition['label']) ?></legend>
+        <p class="hint"><?= e($definition['docs']) ?></p>
+        <label class="check"><input type="checkbox" name="<?= e($prefix) ?>enabled" value="1" <?= ($settings[$prefix . 'enabled'] ?? '0') === '1' ? 'checked' : '' ?>> Bật nguồn</label>
+        <label>API key (trống = giữ nguyên)<input type="password" autocomplete="new-password" name="<?= e($prefix) ?>api_key" value=""></label>
+        <label>Callback HMAC secret (tùy chọn, ≥32 ký tự, trống = giữ nguyên)<input type="password" autocomplete="new-password" name="<?= e($prefix) ?>callback_secret" value=""></label>
+        <p class="hint">Endpoint S2S tùy chọn: /postback/provider/<?= e($providerId) ?> — chỉ dùng nếu provider hỗ trợ hợp đồng chữ ký trong PROVIDERS.md, không phải URL quay lại.</p>
+        <?php foreach (['reward_vnd' => ['Thưởng mặc định (VND)', 0, 2000000], 'share_percent' => ['% thưởng YeuJob khi VND = 0', 0, 100], 'daily_limit' => ['Lượt bắt đầu / tài khoản / 24h', 1, 1000], 'ip_daily_limit' => ['Lượt bắt đầu / IP / 24h', 1, 1000], 'min_seconds' => ['Thời gian tối thiểu (giây)', 1, 86400]] as $field => [$label, $min, $max]): ?>
+          <label><?= e($label) ?><input type="number" min="<?= $min ?>" max="<?= $max ?>" name="<?= e($prefix . $field) ?>" value="<?= e($settings[$prefix . $field] ?? $definition['defaults'][$field] ?? 70) ?>" required></label>
+        <?php endforeach; ?>
+        <?php foreach ($definition['services'] as $service): if ($service['id'] === 'no_ads') continue;
+          $field = 'service_' . $service['id'] . '_reward_vnd'; ?>
+          <label><?= e($service['label']) ?> — VND/lượt (YeuJob: 0 = chia %)<input type="number" min="0" max="2000000" name="<?= e($prefix . $field) ?>" value="<?= e($settings[$prefix . $field] ?? $settings[$prefix . 'reward_vnd'] ?? $definition['defaults']['reward_vnd']) ?>" required></label>
+        <?php endforeach; ?>
+      </fieldset>
+    <?php endforeach; ?>
   </div>
   <button class="btn" type="submit">Lưu cài đặt</button>
 </form>

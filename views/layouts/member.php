@@ -25,7 +25,7 @@
 <?php endforeach; ?>
 <?= $content ?>
 </main>
-<footer class="footer">© <?= date('Y') ?> High-Traffic X-Gain (htxg.pro) — Kiếm tiền mỗi ngày. 1 USD ≈ <?= vnd((int)\App\Settings::get('usd_to_vnd_rate', '26000')) ?> (member <?= (int)\App\Settings::get('site_member_share_percent', 100) ?>%). Cập nhật: <?= e(\App\Settings::get('usd_rate_updated_at', 'chưa có')) ?></footer>
+<footer class="footer">© <?= date('Y') ?> High-Traffic X-Gain (htxg.pro) — Kiếm tiền mỗi ngày. Tỷ giá cố định: 1 USDT/USD = <?= vnd(\App\RateUpdater::FIXED_RATE) ?> (member <?= (int)\App\Settings::get('site_member_share_percent', 100) ?>%).</footer>
 <script src="/assets/app.js" defer></script>
 </body>
 </html>

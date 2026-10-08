@@ -58,6 +58,16 @@ try {
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path = rtrim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/', '/') ?: '/';
 
+if (preg_match('#^/postback/provider/([a-z0-9]+)$#', $path, $m)) {
+    if ($method !== 'POST') {
+        json_response(['ok' => false], 405);
+    }
+    \App\Controllers\ProviderController::callback($m[1]);
+}
+if (preg_match('#^/task/return/([a-f0-9]{64})$#', $path, $m) && $method === 'GET') {
+    \App\Controllers\ProviderController::returned($m[1]);
+}
+
 // ---------------------------------------------------------------- postback (no session, no CSRF)
 if ($path === '/postback/pubcrypto' || str_starts_with($path, '/postback/pubcrypto/')) {
     $token = (string)(config('postback_token') ?? '');
@@ -70,7 +80,7 @@ if ($path === '/postback/pubcrypto' || str_starts_with($path, '/postback/pubcryp
         // (trong dashboard PubCrypto nhiều publisher dán chung 1 URL cho cả S2S và Return).
         // GET không phải postback thật → không xử lý tiền, đưa user về trang nhiệm vụ.
         if (Session::userId() !== null) {
-            Session::flash('success', '✅ Nhiệm vụ đã hoàn tất — phần thưởng sẽ tự cộng vào ví trong ít phút.');
+            Session::flash('info', 'Đã quay lại trang nhiệm vụ. Phần thưởng chỉ được cộng khi hệ thống nhận được xác nhận hợp lệ từ nhà cung cấp.');
             redirect('/tasks');
         }
         redirect('/');
@@ -140,6 +150,10 @@ $handled = match (true) {
     $path === '/dashboard'                     && $method === 'GET'  => DashboardController::index(),
     $path === '/tasks'                         && $method === 'GET'  => TaskController::index(),
     $path === '/tasks/start'                   && $method === 'POST' => TaskController::start(),
+    $path === '/tasks/provider/start'          && $method === 'POST' => \App\Controllers\ProviderController::start(),
+    $path === '/tasks/provider/verify'         && $method === 'POST' => \App\Controllers\ProviderController::verify(),
+    $path === '/admin/providers'               && $method === 'GET' => \App\Controllers\ProviderController::review(),
+    $path === '/admin/providers'               && $method === 'POST' => \App\Controllers\ProviderController::decide(),
     $path === '/withdraw'                      && $method === 'GET'  => WithdrawController::index(),
     $path === '/withdraw'                      && $method === 'POST' => WithdrawController::create(),
     $path === '/profile'                       && $method === 'GET'  => DashboardController::profile(),

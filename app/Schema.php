@@ -15,7 +15,7 @@ final class Schema
      * Tăng số này MỖI KHI thêm/bớt DDL, cột, index hoặc setting mặc định mới,
      * nếu không thay đổi sẽ không được áp dụng cho DB đã tồn tại.
      */
-    private const VERSION = '2026-09-21.1';
+    private const VERSION = '2026-10-08.2';
 
     /** Cờ đánh dấu rate_buckets đã đúng cấu trúc (tránh kiểm tra mỗi request). */
     private const FLAG_RATE_BUCKETS = 'rate_buckets_ok';
@@ -289,6 +289,25 @@ final class Schema
         )");
         $idx('idx_clicks_user_time', 'task_clicks', 'user_id, created_at');
 
+        $pdo->exec("CREATE TABLE IF NOT EXISTS provider_attempts (
+            id {$pk}, token {$text(64)} NOT NULL UNIQUE,
+            user_id INTEGER NOT NULL, provider {$text(32)} NOT NULL,
+            service {$text(40)} NOT NULL, status {$text(20)} NOT NULL,
+            reward_vnd INTEGER NOT NULL, share_percent INTEGER NOT NULL,
+            min_seconds INTEGER NOT NULL, ip {$text(64)} NOT NULL,
+            device_hash {$text(64)} NOT NULL, remote_id {$text(100)},
+            short_url TEXT, destination TEXT NOT NULL,
+            created_at {$text(32)} NOT NULL, expires_at {$text(32)} NOT NULL,
+            returned_at {$text(32)}, credited_at {$text(32)}
+        )");
+        $idx('idx_provider_user', 'provider_attempts', 'user_id, created_at');
+        $idx('idx_provider_ip', 'provider_attempts', 'provider, ip, created_at');
+        $idx('uq_provider_remote', 'provider_attempts', 'provider, remote_id', true);
+        // A database row provides a cross-account mutex for IP quota reservations.
+        $pdo->exec("CREATE TABLE IF NOT EXISTS provider_locks (
+            lock_key {$text(100)} PRIMARY KEY
+        )");
+
         // window_start lưu UNIX timestamp (số). Postgres/MySQL dùng kiểu số để so sánh
         // và ràng buộc kiểu đúng; SQLite giữ TEXT(32) để tương thích DB cũ (TEXT affinity).
         $windowStartType = $sqlite ? 'TEXT(32)' : 'BIGINT';
@@ -490,8 +509,8 @@ final class Schema
             'pubcrypto_api_base'   => 'https://pub.cryptolinkforearn.com',
             'pubcrypto_task_cache_ttl' => '45',
                         // Economy
-            'usd_to_vnd_rate'      => '26000',
-            'usd_rate_auto'        => '1',
+            'usd_to_vnd_rate'      => '24000',
+            'usd_rate_auto'        => '0',
             'usd_rate_updated_at'  => '',
             'site_member_share_percent' => '100',
             'min_withdraw_vnd'     => '10000',
@@ -526,7 +545,7 @@ final class Schema
             'register_channel_sms' => '0', // 0 = chỉ Telegram (miễn phí); bật 1 khi có SMS gateway
             'register_channel_telegram' => '1',
             // Auto USD/VND rate
-            'usd_rate_auto'        => '1',
+            'usd_rate_auto'        => '0',
             'usd_rate_updated_at'  => '',
         ];
         // "INSERT OR IGNORE" là cú pháp SQLite. MySQL: INSERT IGNORE; Postgres: ON CONFLICT DO NOTHING.
@@ -574,6 +593,8 @@ final class Schema
             }
         }
 
+        Settings::set('usd_to_vnd_rate', (string)RateUpdater::FIXED_RATE);
+        Settings::set('usd_rate_auto', '0');
         // Self-heal: DB đã tồn tại từ thời brand cũ → cập nhật sang brand hiện tại.
         try {
             $pdo->prepare("UPDATE settings SET svalue = ?, updated_at = ? WHERE skey = 'site_name' AND svalue = ?")

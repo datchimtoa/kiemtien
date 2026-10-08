@@ -56,7 +56,7 @@ final class Withdrawals
         $dailyCount = Settings::getInt('withdraw_daily_count_limit', 3);
         $feePct = Settings::getFloat('withdraw_fee_percent', 0.0);
 
-        if ($amount < $min) {
+        if ($amount <= 0 || $amount < $min) {
             return [false, 'Số tiền rút tối thiểu là ' . vnd($min) . '.'];
         }
         if ($amount > $max) {
@@ -82,83 +82,118 @@ final class Withdrawals
             return [false, 'Chỉ được đăng ký rút tiền vào ngày duyệt: ' . date('d/m/Y', self::nextReviewDay()) . ' (' . implode(', ', array_map('intval', array_filter(explode(',', (string)Settings::get('withdraw_review_days', '7,14,21,28'))))) . ' hàng tháng).'];
         }
 
-        $todayStart = date('Y-m-d 00:00:00');
-        $sumToday = (int)(Database::value(
-            "SELECT COALESCE(SUM(amount_vnd),0) FROM withdrawals WHERE user_id = ? AND status IN ('pending','processing','completed') AND created_at >= ?",
-            [$userId, $todayStart]
-        ) ?? 0);
-        if ($sumToday + $amount > $dailyLimit) {
-            return [false, 'Bạn đã đạt hạn mức rút tiền trong ngày (' . vnd($dailyLimit) . ').'];
-        }
-        $countToday = (int)(Database::value(
-            "SELECT COUNT(*) FROM withdrawals WHERE user_id = ? AND status IN ('pending','processing','completed') AND created_at >= ?",
-            [$userId, $todayStart]
-        ) ?? 0);
-        if ($countToday >= $dailyCount) {
-            return [false, "Bạn chỉ được tạo tối đa {$dailyCount} yêu cầu rút mỗi ngày."];
-        }
-        $pending = Database::one("SELECT id FROM withdrawals WHERE user_id = ? AND status IN ('pending','processing')", [$userId]);
-        if ($pending !== null) {
-            return [false, 'Bạn còn một yêu cầu rút tiền đang chờ xử lý.'];
-        }
-
-        $fee = (int)floor($amount * $feePct / 100);
+        Database::begin();
         try {
+            $lock = Database::isSqlite() ? '' : ' FOR UPDATE';
+            $user = Database::one('SELECT balance_vnd FROM users WHERE id = ?' . $lock, [$userId]);
+            if ($user === null || (int)$user['balance_vnd'] < $amount) {
+                Database::rollback();
+                return [false, 'Số dư không đủ.'];
+            }
+            $todayStart = date('Y-m-d 00:00:00');
+            $sumToday = (int)(Database::value(
+                "SELECT COALESCE(SUM(amount_vnd),0) FROM withdrawals WHERE user_id = ? AND status IN ('pending','processing','completed') AND created_at >= ?",
+                [$userId, $todayStart]
+            ) ?? 0);
+            if ($sumToday + $amount > $dailyLimit) {
+                Database::rollback();
+                return [false, 'Bạn đã đạt hạn mức rút tiền trong ngày (' . vnd($dailyLimit) . ').'];
+            }
+            $countToday = (int)(Database::value(
+                "SELECT COUNT(*) FROM withdrawals WHERE user_id = ? AND status IN ('pending','processing','completed') AND created_at >= ?",
+                [$userId, $todayStart]
+            ) ?? 0);
+            if ($countToday >= $dailyCount) {
+                Database::rollback();
+                return [false, "Bạn chỉ được tạo tối đa {$dailyCount} yêu cầu rút mỗi ngày."];
+            }
+            $pending = Database::one("SELECT id FROM withdrawals WHERE user_id = ? AND status IN ('pending','processing')", [$userId]);
+            if ($pending !== null) {
+                Database::rollback();
+                return [false, 'Bạn còn một yêu cầu rút tiền đang chờ xử lý.'];
+            }
+
+            $fee = (int)floor($amount * $feePct / 100);
             Wallet::post($userId, Wallet::TYPE_WITHDRAW_HOLD, -$amount, [
                 'source' => 'withdrawal',
                 'note' => 'Yêu cầu rút tiền #' . $method,
             ]);
-        } catch (\Throwable $e) {
-            return [false, 'Số dư không đủ hoặc có lỗi. Vui lòng thử lại.'];
-        }
 
-        Database::run(
-            'INSERT INTO withdrawals(user_id, amount_vnd, fee_vnd, method, account_name, account_number, bank_name, status, requested_ip, requested_device, created_at)
-             VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-            [$userId, $amount, $fee, $method, $accountName, $accountNumber, $bankName, 'pending', client_ip(), (string)Fingerprint::sessionDeviceId(), now()]
-        );
-        Audit::log('user', $userId, 'withdraw_requested', 'withdrawals', ['amount' => $amount, 'method' => $method]);
-        return [true, null];
+            Database::run(
+                'INSERT INTO withdrawals(user_id, amount_vnd, fee_vnd, method, account_name, account_number, bank_name, status, requested_ip, requested_device, created_at)
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                [$userId, $amount, $fee, $method, $accountName, $accountNumber, $bankName, 'pending', client_ip(), (string)Fingerprint::sessionDeviceId(), now()]
+            );
+            Audit::log('user', $userId, 'withdraw_requested', 'withdrawals', ['amount' => $amount, 'method' => $method]);
+            Database::commit();
+            return [true, null];
+        } catch (\Throwable $e) {
+            Database::rollback();
+            error_log('[withdraw] request failed: ' . $e->getMessage());
+            return [false, 'Không thể tạo yêu cầu rút tiền. Vui lòng thử lại.'];
+        }
     }
 
     /** Admin: mark completed (money already debited). Only on review days (7,14,21,28). */
     public static function complete(int $withdrawId, int $adminId, string $note = ''): array
     {
-        $wd = Database::one("SELECT * FROM withdrawals WHERE id = ? AND status IN ('pending','processing')", [$withdrawId]);
-        if ($wd === null) {
-            return [false, 'Không tìm thấy yêu cầu rút tiền hợp lệ.'];
+        Database::begin();
+        try {
+            $lock = Database::isSqlite() ? '' : ' FOR UPDATE';
+            $wd = Database::one("SELECT * FROM withdrawals WHERE id = ? AND status IN ('pending','processing')" . $lock, [$withdrawId]);
+            if ($wd === null) {
+                Database::rollback();
+                return [false, 'Không tìm thấy yêu cầu rút tiền hợp lệ.'];
+            }
+            if (!self::isReviewDay()) {
+                Database::rollback();
+                return [false, 'Chỉ được duyệt rút tiền vào ngày 7, 14, 21, 28 hàng tháng. Kỳ duyệt gần nhất: ' . date('d/m/Y', self::nextReviewDay()) . '.'];
+            }
+            Database::run(
+                "UPDATE withdrawals SET status = 'completed', admin_note = ?, processed_by = ?, processed_at = ? WHERE id = ?",
+                [$note, $adminId, now(), $withdrawId]
+            );
+            Database::run('UPDATE users SET withdrawn_total_vnd = withdrawn_total_vnd + ? WHERE id = ?', [(int)$wd['amount_vnd'], (int)$wd['user_id']]);
+            Audit::log('admin', $adminId, 'withdraw_completed', 'withdrawals/' . $withdrawId, ['amount' => (int)$wd['amount_vnd']]);
+            Database::commit();
+            return [true, null];
+        } catch (\Throwable $e) {
+            Database::rollback();
+            error_log('[withdraw] complete failed: ' . $e->getMessage());
+            return [false, 'Không thể duyệt yêu cầu. Vui lòng thử lại.'];
         }
-        if (!self::isReviewDay()) {
-            return [false, 'Chỉ được duyệt rút tiền vào ngày 7, 14, 21, 28 hàng tháng. Kỳ duyệt gần nhất: ' . date('d/m/Y', self::nextReviewDay()) . '.'];
-        }
-        Database::run(
-            "UPDATE withdrawals SET status = 'completed', admin_note = ?, processed_by = ?, processed_at = ? WHERE id = ?",
-            [$note, $adminId, now(), $withdrawId]
-        );
-        Database::run('UPDATE users SET withdrawn_total_vnd = withdrawn_total_vnd + ? WHERE id = ?', [(int)$wd['amount_vnd'], (int)$wd['user_id']]);
-        Audit::log('admin', $adminId, 'withdraw_completed', 'withdrawals/' . $withdrawId, ['amount' => (int)$wd['amount_vnd']]);
-        return [true, null];
     }
 
     /** Admin: reject → refund the held amount. */
     public static function reject(int $withdrawId, int $adminId, string $note): array
     {
-        $wd = Database::one("SELECT * FROM withdrawals WHERE id = ? AND status IN ('pending','processing')", [$withdrawId]);
-        if ($wd === null) {
-            return [false, 'Không tìm thấy yêu cầu rút tiền hợp lệ.'];
+        Database::begin();
+        try {
+            $lock = Database::isSqlite() ? '' : ' FOR UPDATE';
+            $wd = Database::one("SELECT * FROM withdrawals WHERE id = ? AND status IN ('pending','processing')" . $lock, [$withdrawId]);
+            if ($wd === null) {
+                Database::rollback();
+                return [false, 'Không tìm thấy yêu cầu rút tiền hợp lệ.'];
+            }
+            if (trim($note) === '') {
+                Database::rollback();
+                return [false, 'Vui lòng nhập lý do từ chối.'];
+            }
+            Database::run(
+                "UPDATE withdrawals SET status = 'rejected', admin_note = ?, processed_by = ?, processed_at = ? WHERE id = ?",
+                [$note, $adminId, now(), $withdrawId]
+            );
+            Wallet::post((int)$wd['user_id'], Wallet::TYPE_WITHDRAW_REF, (int)$wd['amount_vnd'], [
+                'source' => 'withdrawal',
+                'note' => 'Hoàn tiền: từ chối rút #' . $withdrawId . ' — ' . $note,
+            ]);
+            Audit::log('admin', $adminId, 'withdraw_rejected', 'withdrawals/' . $withdrawId, ['amount' => (int)$wd['amount_vnd'], 'note' => $note]);
+            Database::commit();
+            return [true, null];
+        } catch (\Throwable $e) {
+            Database::rollback();
+            error_log('[withdraw] reject failed: ' . $e->getMessage());
+            return [false, 'Không thể từ chối yêu cầu. Vui lòng thử lại.'];
         }
-        if (trim($note) === '') {
-            return [false, 'Vui lòng nhập lý do từ chối.'];
-        }
-        Database::run(
-            "UPDATE withdrawals SET status = 'rejected', admin_note = ?, processed_by = ?, processed_at = ? WHERE id = ?",
-            [$note, $adminId, now(), $withdrawId]
-        );
-        Wallet::post((int)$wd['user_id'], Wallet::TYPE_WITHDRAW_REF, (int)$wd['amount_vnd'], [
-            'source' => 'withdrawal',
-            'note' => 'Hoàn tiền: từ chối rút #' . $withdrawId . ' — ' . $note,
-        ]);
-        Audit::log('admin', $adminId, 'withdraw_rejected', 'withdrawals/' . $withdrawId, ['amount' => (int)$wd['amount_vnd'], 'note' => $note]);
-        return [true, null];
     }
 }

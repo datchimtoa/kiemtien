@@ -83,12 +83,22 @@ final class Http
 
     /**
      * Gọi API và decode JSON.
-     * @return array{ok:bool,http:int,data:array<string,mixed>,error:string,body:string}
+     * @return array{ok:bool,http:int,data:array<string,mixed>,error:string,body:string,response_kind:string}
      */
     public static function json(string $method, string $url, array $opt = []): array
     {
         $r = self::request($method, $url, $opt);
         $data = json_decode($r['body'], true);
+        // Fixed labels only: never copy an upstream title/message into logs.
+        $kind = is_array($data) ? 'json' : (trim($r['body']) === '' ? 'empty' : 'non_json');
+        if (!is_array($data)) {
+            $sample = strtolower(substr($r['body'], 0, 65536));
+            if (str_contains($sample, '/cdn-cgi/challenge-platform/') || str_contains($sample, 'cf-chl-')) {
+                $kind = 'challenge_marker';
+            } elseif (str_contains($sample, '<html') || str_contains($sample, '<!doctype html')) {
+                $kind = 'html';
+            }
+        }
         if (!is_array($data)) {
             return [
                 'ok'    => false,
@@ -96,9 +106,10 @@ final class Http
                 'data'  => [],
                 'error' => $r['error'] !== '' ? $r['error'] : 'Phản hồi không phải JSON.',
                 'body'  => substr($r['body'], 0, 300),
+                'response_kind' => $kind,
             ];
         }
-        return ['ok' => $r['ok'], 'http' => $r['http'], 'data' => $data, 'error' => $r['error'], 'body' => $r['body']];
+        return ['ok' => $r['ok'], 'http' => $r['http'], 'data' => $data, 'error' => $r['error'], 'body' => $r['body'], 'response_kind' => $kind];
     }
 
     /** Lấy giá trị lồng nhau theo đường dẫn "data.item.id". */

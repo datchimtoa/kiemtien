@@ -302,7 +302,7 @@ try {
 } catch (RuntimeException $e) {
     check('unexpected error remains private with reference', !str_contains($e->getMessage(), 'test-key') && str_contains($e->getMessage(), 'Mã lỗi:'));
 }
-foreach ([0, 401, 403, 429, 500] as $status) {
+foreach ([0, 401, 403, 429, 500, 503] as $status) {
     Http::fake(fn() => ['ok' => false, 'http' => $status, 'body' => json_encode(['message' => 'test-key private body'])]);
     try {
         Client::call('yeujob', Catalog::get('yeujob')['job']['list']);
@@ -311,6 +311,28 @@ foreach ([0, 401, 403, 429, 500] as $status) {
         check('HTTP diagnostic safe and actionable ' . $status, !str_contains($e->getMessage(), 'test-key')
             && !str_contains($e->getMessage(), 'private body')
             && str_contains($e->getMessage(), $status === 0 ? 'Không kết nối' : 'HTTP ' . $status));
+    }
+}
+foreach ([
+    'json' => '{"message":"test-key private body"}',
+    'empty' => '',
+    'html' => '<html><title>test-key private body</title></html>',
+    'challenge_marker' => '<html><script src="/cdn-cgi/challenge-platform/test-key"></script></html>',
+    'non_json' => 'test-key private body',
+] as $kind => $body) {
+    $requests = 0;
+    Http::fake(function () use ($body, &$requests) {
+        $requests++;
+        return ['ok' => false, 'http' => 503, 'body' => $body];
+    });
+    try {
+        Client::call('yeujob', Catalog::get('yeujob')['shorten'], ['url' => 'https://example.test/return']);
+        check('503 classified safely ' . $kind, false);
+    } catch (RuntimeException $e) {
+        check('503 classified safely ' . $kind, str_contains($e->getMessage(), 'HTTP 503')
+            && str_contains($e->getMessage(), 'response_kind=' . $kind)
+            && !str_contains($e->getMessage(), 'test-key') && !str_contains($e->getMessage(), 'private body')
+            && $requests === 1);
     }
 }
 Http::fake(null);

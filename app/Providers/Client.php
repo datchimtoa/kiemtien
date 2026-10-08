@@ -43,8 +43,11 @@ final class Client
                     $status === 0 => 'Không kết nối được API nhà cung cấp (mạng, TLS hoặc timeout).',
                     $status === 401 || $status === 403 => "API nhà cung cấp từ chối truy cập (HTTP {$status}); cần kiểm tra API key và quyền truy cập.",
                     $status === 429 => 'API nhà cung cấp đang giới hạn tần suất (HTTP 429).',
-                    default => "API nhà cung cấp trả lỗi HTTP {$status} hoặc phản hồi không phải JSON hợp lệ.",
+                    $status === 503 => 'API nhà cung cấp tạm không phục vụ yêu cầu (HTTP 503). Không tạo được link; chưa có xác nhận nhận job.',
+                    $status >= 200 && $status < 300 => "API nhà cung cấp trả HTTP {$status} nhưng phản hồi không phải JSON hợp lệ.",
+                    default => "API nhà cung cấp trả lỗi HTTP {$status}.",
                 };
+                $reason .= ' response_kind=' . $response['response_kind'];
                 throw new RequestException($reason);
             }
             throw new RequestException('Nhà cung cấp chưa xác nhận yêu cầu (HTTP ' . (int)$response['http'] . ', success không hợp lệ). Vui lòng kiểm tra cấu hình hoặc liên hệ hỗ trợ.');

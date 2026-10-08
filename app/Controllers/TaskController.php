@@ -22,10 +22,21 @@ final class TaskController
             'user'   => $user,
             'res'    => $res,
             'providers' => \App\Providers\Catalog::definitions(),
-            'providerAttempts' => Database::all('SELECT * FROM provider_attempts WHERE user_id = ? ORDER BY id DESC LIMIT 30', [(int)$user['id']]),
             'providerCounts' => array_column(Database::all("SELECT provider, COUNT(*) AS starts FROM provider_attempts WHERE user_id = ? AND created_at >= ? AND status <> 'creation_failed' GROUP BY provider", [(int)$user['id'], date('Y-m-d H:i:s', time() - 86400)]), 'starts', 'provider'),
             'providerLastStart' => Database::value('SELECT MAX(created_at) FROM provider_attempts WHERE user_id = ?', [(int)$user['id']]),
             'clickCooldown' => (int)\App\Settings::get('task_click_cooldown_seconds', '20'),
+        ], 'member');
+    }
+
+    /** GET /tasks/history — member-owned task records, without provider API calls. */
+    public static function history(): void
+    {
+        $user = require_user();
+        View::show('tasks/history', [
+            'user' => $user,
+            'providers' => \App\Providers\Catalog::definitions(),
+            'providerAttempts' => Database::all('SELECT * FROM provider_attempts WHERE user_id = ? ORDER BY id DESC LIMIT 30', [(int)$user['id']]),
+            'taskClicks' => Database::all('SELECT task_name, created_at FROM task_clicks WHERE user_id = ? ORDER BY id DESC LIMIT 30', [(int)$user['id']]),
         ], 'member');
     }
 

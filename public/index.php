@@ -149,6 +149,7 @@ $handled = match (true) {
     $path === '/logout'                        && $method === 'POST' => AuthController::logout(),
     $path === '/dashboard'                     && $method === 'GET'  => DashboardController::index(),
     $path === '/tasks'                         && $method === 'GET'  => TaskController::index(),
+    $path === '/tasks/history'                 && $method === 'GET'  => TaskController::history(),
     $path === '/tasks/start'                   && $method === 'POST' => TaskController::start(),
     $path === '/tasks/provider/start'          && $method === 'POST' => \App\Controllers\ProviderController::start(),
     $path === '/tasks/provider/verify'         && $method === 'POST' => \App\Controllers\ProviderController::verify(),

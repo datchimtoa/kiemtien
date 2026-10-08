@@ -102,10 +102,10 @@ final class Catalog
             'xtask' => [
                 'label'  => 'XTASK (xtask.top)',
                 'kind'   => 'shortlink',
-                'verify' => 'poll',
+                'verify' => 'manual',
                 'base'   => 'https://xtask.top',
                 'auth'   => 'bearer',
-                'docs'   => 'Tạo link: POST /api/public/v1/shorten (JSON). Tra trạng thái: /api/public/v1/status/{code}.',
+                'docs'   => 'Tạo link: POST /api/public/v1/shorten (JSON, Bearer key). Admin đối chiếu và duyệt thưởng; chưa có schema xác nhận trả thưởng cho status API.',
                 'services' => [
                     ['id' => 'traffic',            'label' => 'Traffic Google',      'type' => 'traffic'],
                     ['id' => 'direct',             'label' => 'Traffic Direct',      'type' => 'direct'],

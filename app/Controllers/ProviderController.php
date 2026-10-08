@@ -52,7 +52,7 @@ final class ProviderController
             \App\Risk::event((int)$user['id'], 'provider_return_invalid', 'medium', substr($e->getMessage(), 0, 200));
             Session::flash('error', $e->getMessage());
         }
-        redirect('/tasks');
+        redirect('/tasks/history');
     }
 
     public static function verify(): void
@@ -61,7 +61,7 @@ final class ProviderController
         Csrf::check();
         if (!RateLimiter::attempt('provider_poll', (string)$user['id'], 10, 60)) {
             Session::flash('error', 'Vui lòng chờ trước khi kiểm tra lại.');
-            redirect('/tasks');
+            redirect('/tasks/history');
         }
         try {
             $ok = Tasks::poll((int)$user['id'], (string)input('token', ''));
@@ -69,7 +69,7 @@ final class ProviderController
         } catch (\Throwable $e) {
             Session::flash('error', 'Không kiểm tra được nhà cung cấp. Vui lòng thử lại sau.');
         }
-        redirect('/tasks');
+        redirect('/tasks/history');
     }
 
     public static function callback(string $provider): void

@@ -33,16 +33,32 @@ $check('cards reuse existing task layout', str_contains($html, 'card task-card s
 $check('no paid no-ad service', !str_contains($html, 'name="service" value="no_ads"'));
 $check('new providers visible when old provider fails', str_contains($html, '/tasks/provider/start'));
 $check('YeuJob V2 card explains manual review', str_contains($html, 'YeuJob V2: admin duyệt thưởng thủ công'));
+$check('task list links to separate history', str_contains($html, 'href="/tasks/history"'));
+$check('task list has no separate source sections or history table', !str_contains($html, 'Nhiệm vụ từ đối tác') && !str_contains($html, 'Nhiệm vụ PubCrypto') && !str_contains($html, '<table>'));
+$data['res'] = ['ok' => true, 'tasks' => [[
+    'id' => 123, 'task_name' => 'PubCrypto sample', 'member_reward' => 400,
+    'cooldown_remaining' => 0, 'available' => true, 'remaining_in_cycle' => 1,
+    'total_max' => 1, 'cooldown_seconds' => 20,
+]]];
+$html = View::render('tasks/index', $data, null);
+$check('both sources share one task grid', substr_count($html, 'class="task-grid"') === 1
+    && str_contains($html, '/tasks/provider/start') && str_contains($html, 'data-url="/tasks/start"'));
+$data['taskClicks'] = [['task_name' => '<script>sample</script>', 'created_at' => now()]];
+$html = View::render('tasks/history', $data, null);
+$check('PubCrypto history escapes names and does not claim payment', str_contains($html, '&lt;script&gt;sample&lt;/script&gt;')
+    && str_contains($html, 'Lượt mở không xác nhận hoàn thành hay trả thưởng'));
+$data['taskClicks'] = [];
+$data['res'] = ['ok' => false, 'error' => 'Nguồn cũ tạm thời không khả dụng.'];
 $data['providerAttempts'] = [[
     'id' => 1, 'provider' => 'yeujob', 'service' => 'friend', 'remote_id' => 'v2:test',
     'status' => 'pending', 'expires_at' => date('Y-m-d H:i:s', time() + 3600),
     'created_at' => now(), 'reward_vnd' => 400, 'token' => str_repeat('a', 64),
     'short_url' => 'https://yeujob.com/q/test',
 ]];
-$html = View::render('tasks/index', $data, null);
+$html = View::render('tasks/history', $data, null);
 $check('V2 before return shows in progress without polling', str_contains($html, 'Đang làm nhiệm vụ') && !str_contains($html, 'Kiểm tra xác nhận'));
 $data['providerAttempts'][0]['returned_at'] = now();
-$html = View::render('tasks/index', $data, null);
+$html = View::render('tasks/history', $data, null);
 $check('V2 pending shows manual review without poll button', str_contains($html, 'Chờ admin duyệt') && !str_contains($html, 'Kiểm tra xác nhận'));
 $data['providerAttempts'] = [];
 $data['providerAttempts'] = [[
@@ -54,7 +70,7 @@ set_error_handler(static function ($severity, $message, $file, $line) {
     throw new ErrorException($message, 0, $severity, $file, $line);
 });
 try {
-    $html = View::render('tasks/index', $data, null);
+    $html = View::render('tasks/history', $data, null);
     $check('failed YeuJob with null remote ID renders without warnings', str_contains($html, 'Tạo thất bại'));
     $html = View::render('admin/providers', ['attempts' => [array_merge($data['providerAttempts'][0], ['user_id' => 1, 'ip' => '203.0.113.1'])]], null);
     $check('admin failed YeuJob with null remote ID renders without warnings', str_contains($html, 'failed'));
@@ -70,7 +86,7 @@ foreach ($providers as $id => $definition) {
 }
 $html = View::render('tasks/index', $data, null);
 $check('disabled providers not offered', !str_contains($html, '/tasks/provider/start'));
-$check('empty state explained', str_contains($html, 'Chưa có nguồn đối tác được bật'));
+$check('empty state explained', str_contains($html, 'Chưa có nhiệm vụ khả dụng'));
 
 // Local visual preview with mock data only; no provider requests or persistent DB.
 if (getenv('TASKS_PREVIEW_FILE')) {

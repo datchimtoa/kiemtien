@@ -8,6 +8,10 @@
       <p>Tài khoản: <?= e($attempt['user_phone'] ?? 'Không tìm thấy') ?> · <?= e($attempt['user_full_name'] ?? '') ?> · ID <?= (int)$attempt['user_id'] ?></p>
       <p><?= e($attempt['service']) ?> · <?= vnd($attempt['reward_vnd']) ?> · <?= e($attempt['status']) ?></p>
       <p>Mã provider: <?= e($attempt['remote_id']) ?> · IP: <?= e($attempt['ip']) ?> · Bắt đầu: <?= e($attempt['created_at']) ?> · Quay lại: <?= e($attempt['returned_at'] ?? 'Chưa') ?></p>
+      <?php if ($attempt['provider'] === 'yeujob' && str_starts_with($attempt['remote_id'], 'v2:')): ?>
+        <p class="hint">YeuJob V2 — chỉ duyệt tay sau khi đối chiếu job và doanh thu trên YeuJob. Mã v2 là mã link, không phải application ID V1.</p>
+        <p>Link đã tạo: <?= e($attempt['short_url']) ?></p>
+      <?php endif; ?>
       <?php if ($attempt['status'] === 'pending'): ?>
         <form method="post" action="/admin/providers" class="stack">
           <?= \App\Csrf::field() ?>

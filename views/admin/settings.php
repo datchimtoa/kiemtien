@@ -72,7 +72,7 @@
   <div class="card">
     <h3>Nguồn nhiệm vụ &amp; thù lao</h3>
     <p><a href="/admin/providers">Xem và duyệt nhiệm vụ provider</a></p>
-    <p class="hint">Quay lại trình duyệt không phải bằng chứng hoàn thành. Chỉ YeuJob (approved + paid) và Traffic24h (views_valid) có xác minh tự động trong tài liệu hiện tại. Các nguồn còn lại chờ admin kiểm tra doanh thu/bằng chứng. XTASK thiếu định dạng phản hồi status. Không cộng thưởng theo timer.</p>
+    <p class="hint">Quay lại trình duyệt không phải bằng chứng hoàn thành. YeuJob V2 chờ admin duyệt tay và cần thưởng cố định VND/lượt lớn hơn 0. Traffic24h (views_valid) có xác minh tự động; lượt YeuJob V1 cũ vẫn giữ tra cứu approved + paid. XTASK thiếu định dạng phản hồi status. Không cộng thưởng theo timer.</p>
     <?php foreach (\App\Providers\Catalog::definitions() as $providerId => $definition):
         $prefix = 'provider_' . $providerId . '_'; ?>
       <fieldset>
@@ -83,12 +83,12 @@
         <label>Callback HMAC secret (tùy chọn, ≥32 ký tự, trống = giữ nguyên)<input type="password" autocomplete="new-password" name="<?= e($prefix) ?>callback_secret" value=""></label>
         <p class="hint">Không phải API key. Chỉ cấu hình khóa bí mật dùng chung với server provider khi họ hỗ trợ đúng giao thức callback; nếu chưa hỗ trợ thì không cần nhập. HMAC không dùng để tạo nhiệm vụ.</p>
         <p class="hint">Endpoint S2S tùy chọn: /postback/provider/<?= e($providerId) ?> — chỉ dùng nếu provider hỗ trợ hợp đồng chữ ký trong PROVIDERS.md, không phải URL quay lại.</p>
-        <?php foreach (['reward_vnd' => ['Thưởng mặc định (VND)', 0, 2000000], 'share_percent' => ['% thưởng YeuJob khi VND = 0', 0, 100], 'daily_limit' => ['Lượt bắt đầu / tài khoản / 24h', 1, 1000], 'ip_daily_limit' => ['Lượt bắt đầu / IP / 24h', 1, 1000], 'min_seconds' => ['Thời gian tối thiểu (giây)', 1, 86400]] as $field => [$label, $min, $max]): ?>
+        <?php foreach (['reward_vnd' => ['Thưởng mặc định (VND)', 0, 2000000], 'share_percent' => ['% chia thưởng (chỉ dùng cho mô hình job V1, không dùng YeuJob V2)', 0, 100], 'daily_limit' => ['Lượt bắt đầu / tài khoản / 24h', 1, 1000], 'ip_daily_limit' => ['Lượt bắt đầu / IP / 24h', 1, 1000], 'min_seconds' => ['Thời gian tối thiểu (giây)', 1, 86400]] as $field => [$label, $min, $max]): ?>
           <label><?= e($label) ?><input type="number" min="<?= $min ?>" max="<?= $max ?>" name="<?= e($prefix . $field) ?>" value="<?= e($settings[$prefix . $field] ?? $definition['defaults'][$field] ?? 70) ?>" required></label>
         <?php endforeach; ?>
         <?php foreach ($definition['services'] as $service): if ($service['id'] === 'no_ads') continue;
           $field = 'service_' . $service['id'] . '_reward_vnd'; ?>
-          <label><?= e($service['label']) ?> — VND/lượt (YeuJob: 0 = chia %)<input type="number" min="0" max="2000000" name="<?= e($prefix . $field) ?>" value="<?= e($settings[$prefix . $field] ?? $settings[$prefix . 'reward_vnd'] ?? $definition['defaults']['reward_vnd']) ?>" required></label>
+          <label><?= e($service['label']) ?> — VND/lượt (YeuJob V2: phải lớn hơn 0, admin duyệt tay)<input type="number" min="<?= $providerId === 'yeujob' ? 1 : 0 ?>" max="2000000" name="<?= e($prefix . $field) ?>" value="<?= e($settings[$prefix . $field] ?? $settings[$prefix . 'reward_vnd'] ?? $definition['defaults']['reward_vnd']) ?>" required></label>
         <?php endforeach; ?>
       </fieldset>
     <?php endforeach; ?>

@@ -36,13 +36,22 @@ final class Catalog
             // 1. YeuJob (yeujob.com)
             'yeujob' => [
                 'label'  => 'YeuJob (yeujob.com)',
-                'kind'   => 'job',
-                'verify' => 'poll',
-                'docs'   => 'Chợ job Review Google Map / VIP: friend_jobs → accept_friend_job → friend_job_status.',
+                'kind'   => 'shortlink',
+                'verify' => 'manual',
+                'base'   => 'https://yeujob.com',
+                'docs'   => 'API V2 /st → shortenedUrl → làm job → quay lại chờ admin đối chiếu và duyệt thưởng. Không tự cộng tiền.',
                 'services' => [
                     ['id' => 'friend', 'label' => 'Nhận job Review Map / VIP'],
                 ],
-                'target_label' => 'Không cần URL đích — job lấy từ sàn YeuJob',
+                'target_label' => 'URL quay lại được tạo tự động; admin duyệt thưởng cố định VND/lượt.',
+                'shorten' => [
+                    'method' => 'GET',
+                    'url' => 'https://yeujob.com/st',
+                    'query' => ['api' => '{key}', 'url' => '{url}'],
+                    'ok' => 'success',
+                    'result' => ['shortenedUrl', 'data.shortenedUrl'],
+                ],
+                // Retained only to verify already-created V1 attempts.
                 'job' => [
                     'list' => [
                         'method'  => 'GET',
@@ -79,7 +88,7 @@ final class Catalog
                     'fail_values'  => ['rejected', 'cancelled'],
                 ],
                 'defaults' => [
-                    'reward_vnd'     => 0,   // 0 = theo % reward thật của sàn
+                    'reward_vnd'     => 0, // Admin must configure a positive fixed V2 reward.
                     'share_percent'  => 70,
                     'daily_limit'    => 10,
                     'min_seconds'    => 30,

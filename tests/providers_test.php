@@ -99,16 +99,34 @@ $viewCount = 1;
 check('validated view pays frozen reward', Tasks::poll($uid, $token) && Wallet::balance($uid) === 550);
 check('duplicate verification does not pay twice', !Tasks::poll($uid, $token) && Wallet::balance($uid) === 550);
 
-$remote = 'job-456'; $paid = false;
-Http::fake(function ($method, $url, $opt) use (&$paid, &$remote) {
-    if (str_contains($url, 'friend_jobs')) return ['body' => json_encode(['success' => true, 'data' => [['id' => 123, 'slots_left' => 1]]])];
-    if ($method === 'POST') return ['body' => json_encode(['success' => true, 'data' => ['application_id' => $remote, 'friend_url' => 'https://yeujob.com/friend-review.php?t=test', 'reward' => 5000]])];
-    return ['body' => json_encode(['success' => true, 'data' => ['application_id' => $remote, 'status' => 'approved', 'reward_status' => $paid ? 'paid' : 'pending', 'reward' => 5000]])];
+Settings::set('provider_yeujob_service_friend_reward_vnd', '0');
+rejects('V2 rejects legacy zero reward before remote call', fn() => Tasks::start($uid, 'yeujob', 'friend'));
+Settings::set('provider_yeujob_service_friend_reward_vnd', '3500');
+Http::fake(function ($method, $url, $opt) {
+    parse_str((string)parse_url($url, PHP_URL_QUERY), $query);
+    check('YeuJob V2 uses st without V1 list or accept', $method === 'GET'
+        && parse_url($url, PHP_URL_PATH) === '/st' && ($query['api'] ?? '') === 'test-key'
+        && str_starts_with($query['url'] ?? '', 'https://example.test/task/return/'));
+    return ['body' => json_encode(['success' => true, 'shortenedUrl' => 'https://yeujob.com/q/job-456'])];
 });
 $job = Tasks::start($uid, 'yeujob', 'friend'); age($job['token']);
-check('approved but unpaid job waits', !Tasks::poll($uid, $job['token']));
-$paid = true;
-check('approved paid job shares VND once', Tasks::poll($uid, $job['token']) && Wallet::balance($uid) === 4050);
+Tasks::returned($uid, $job['token']);
+Http::fake(function () { throw new RuntimeException('V2 must not poll V1'); });
+check('V2 return and poll never pay', !Tasks::poll($uid, $job['token']) && Wallet::balance($uid) === 550);
+check('V2 rejects API and callback credit', !Tasks::credit($job['token'], 'provider_api') && !Tasks::credit($job['token'], 'signed_callback', 'yeujob'));
+Settings::set('provider_yeujob_callback_secret', str_repeat('v', 40));
+$v2Body = json_encode(['token' => $job['token'], 'remote_id' => 'v2:job-456', 'status' => 'paid']);
+$v2Time = (string)time();
+check('authenticated callback cannot pay manual V2 task', !Callback::process('yeujob', $v2Time, hash_hmac('sha256', $v2Time . '.' . $v2Body, str_repeat('v', 40)), $v2Body) && Wallet::balance($uid) === 550);
+Database::begin();
+check('V2 admin approves frozen reward', Tasks::credit($job['token'], 'admin_review'));
+Audit::log('admin', 1, 'provider_approve', $job['token'], ['note' => 'Provider-side V2 evidence checked']);
+Database::commit();
+check('V2 approval paid once', Wallet::balance($uid) === 4050 && !Tasks::credit($job['token'], 'admin_review'));
+// Simulate an existing V1 attempt; retain authenticated legacy polling.
+Database::run("UPDATE provider_attempts SET remote_id = 'legacy-456', status = 'pending' WHERE token = ?", [$job['token']]);
+Http::fake(fn() => ['body' => json_encode(['success' => true, 'data' => ['application_id' => 'legacy-456', 'status' => 'approved', 'reward_status' => 'paid', 'reward' => 5000]])]);
+check('legacy V1 polling retained without duplicate wallet credit', Tasks::poll($uid, $job['token']) && Wallet::balance($uid) === 4050);
 
 // Signed callbacks must bind provider, token and remote ID; amounts are ignored.
 // A failed cleanup must never replace the first error when creating a YeuJob task.
@@ -128,11 +146,7 @@ check('failed YeuJob creation never pays', Wallet::balance($uid) === 4050);
 Database::run('DROP TRIGGER fail_provider_cleanup');
 Database::run('UPDATE provider_attempts SET created_at = ? WHERE user_id = ?', [date('Y-m-d H:i:s', time() - 120), $uid]);
 Database::run("CREATE TRIGGER fail_provider_pending BEFORE UPDATE OF status ON provider_attempts WHEN NEW.status = 'pending' BEGIN SELECT RAISE(ABORT, 'injected pending failure'); END");
-Http::fake(function ($method) {
-    return ['body' => json_encode($method === 'POST'
-        ? ['success' => true, 'data' => ['application_id' => 'sql-failure-job', 'friend_url' => 'https://yeujob.com/friend-review.php?t=test', 'reward' => 5000]]
-        : ['success' => true, 'data' => [['id' => 124, 'slots_left' => 1]]])];
-});
+Http::fake(fn() => ['body' => json_encode(['success' => true, 'shortenedUrl' => 'https://yeujob.com/q/sql-failure-job'])]);
 try {
     Tasks::start($uid, 'yeujob', 'friend');
     check('YeuJob pending SQL failure propagates', false);
@@ -208,7 +222,10 @@ foreach (Catalog::definitions() as $providerId => $definition) {
     if ($definition['kind'] !== 'shortlink') continue;
     Http::fake(function ($method, $url, $opt) use ($providerId, $definition) {
         $mapped = str_contains($url, (string)parse_url($definition['shorten']['url'], PHP_URL_HOST));
-        if ($providerId === 'xtask') {
+        if ($providerId === 'yeujob') {
+            $mapped = $mapped && $method === 'GET' && str_contains($url, '/st?') && str_contains($url, 'api=test-key');
+            $body = ['success' => true, 'shortenedUrl' => 'https://yeujob.com/q/test'];
+        } elseif ($providerId === 'xtask') {
             $mapped = $mapped && $method === 'POST' && ($opt['json'] ?? false)
                 && ($opt['body']['type'] ?? '') === 'traffic'
                 && in_array('Authorization: Bearer test-key', $opt['headers'], true);
@@ -237,17 +254,14 @@ $quotaUser = Database::lastId();
 $_SERVER['REMOTE_ADDR'] = '203.0.113.99';
 Settings::set('provider_yeujob_daily_limit', '1');
 Settings::set('provider_yeujob_ip_daily_limit', '1');
-Http::fake(fn() => ['body' => json_encode(['success' => true, 'data' => []])]);
-rejects('empty job list rejects creation', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
+Settings::set('provider_yeujob_api_key', '');
+rejects('missing key rejects creation', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
 $failedToken = Database::value('SELECT token FROM provider_attempts WHERE user_id = ?', [$quotaUser]);
-check('empty job list releases daily reservation', Database::value('SELECT status FROM provider_attempts WHERE token = ?', [$failedToken]) === 'creation_failed');
+check('missing key releases daily reservation', Database::value('SELECT status FROM provider_attempts WHERE token = ?', [$failedToken]) === 'creation_failed');
 rejects('released reservation still enforces cooldown', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
 age($failedToken);
-Http::fake(function ($method) {
-    return ['body' => json_encode($method === 'POST'
-        ? ['success' => true, 'data' => ['application_id' => 'quota-retry-job', 'friend_url' => 'https://yeujob.com/friend-review.php?t=quota', 'reward' => 5000]]
-        : ['success' => true, 'data' => [['id' => 125, 'slots_left' => 1]]])];
-});
+Settings::set('provider_yeujob_api_key', 'test-key');
+Http::fake(fn() => ['body' => json_encode(['success' => true, 'shortenedUrl' => 'https://yeujob.com/q/quota-retry-job'])]);
 $quotaJob = Tasks::start($quotaUser, 'yeujob', 'friend');
 check('released user and IP slot allows successful retry', Database::value('SELECT status FROM provider_attempts WHERE token = ?', [$quotaJob['token']]) === 'pending');
 age($quotaJob['token']);
@@ -272,7 +286,8 @@ rejectsWith('missing key has actionable pre-submission message', fn() => Tasks::
 Settings::set('provider_yeujob_api_key', 'test-key');
 Database::run('UPDATE provider_attempts SET created_at = ? WHERE user_id = ?', [date('Y-m-d H:i:s', time() - 120), $quotaUser]);
 Http::fake(fn() => ['body' => json_encode(['success' => true, 'data' => []])]);
-rejectsWith('empty list has actionable pre-submission message', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'Chưa gửi yêu cầu nhận job: Chưa có job còn lượt.');
+rejects('missing V2 shortenedUrl rejects creation', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
+check('invalid V2 response keeps submitted reservation', Database::value('SELECT status FROM provider_attempts WHERE user_id = ? ORDER BY id DESC LIMIT 1', [$quotaUser]) === 'failed');
 foreach ([0, 401, 403, 429, 500] as $status) {
     Http::fake(fn() => ['ok' => false, 'http' => $status, 'body' => json_encode(['message' => 'test-key private body'])]);
     try {

@@ -46,6 +46,9 @@ final class Tasks
         if ($reward < 0 || $reward > Settings::getInt('postback_max_reward_vnd', 2000000)) {
             throw new \RuntimeException('Thù lao không hợp lệ.');
         }
+        if ($provider === 'yeujob' && $reward === 0) {
+            throw new \RuntimeException('YeuJob V2 cần cấu hình thưởng cố định VND/lượt lớn hơn 0 trong Admin.');
+        }
         $ip = client_ip();
         $share = max(0, min(100, self::setting($provider, 'share_percent')));
         $lockKey = $provider . ':' . hash('sha256', $ip);
@@ -126,6 +129,12 @@ final class Tasks
                 $data = Client::call($provider, $def['shorten'], $vars);
                 $link = Client::safeLink($provider, Http::any($data, $def['shorten']['result']));
                 $remote = (string)(Http::any($data, $def['shorten']['code'] ?? []) ?? basename((string)parse_url($link, PHP_URL_PATH)));
+                if ($provider === 'yeujob') {
+                    if ($remote === '') {
+                        throw new \RuntimeException('Link YeuJob thiếu mã nhiệm vụ.');
+                    }
+                    $remote = 'v2:' . $remote;
+                }
                 if (isset($data['destination']) && $data['destination'] !== $destination) {
                     throw new \RuntimeException('Link cũ có URL đích khác.');
                 }
@@ -173,6 +182,9 @@ final class Tasks
         }
         $def = Catalog::get($row['provider']);
         if ($row['provider'] === 'yeujob') {
+            if (str_starts_with($row['remote_id'], 'v2:')) {
+                return false; // V2 redirects are not payment proof; admin review only.
+            }
             $data = Client::call('yeujob', $def['job']['status'], ['app_id' => $row['remote_id']]);
             if (in_array(Http::pick($data, 'data.status'), ['rejected', 'cancelled'], true)) {
                 Database::run("UPDATE provider_attempts SET status = 'rejected' WHERE token = ? AND status = 'pending'", [$token]);
@@ -215,6 +227,7 @@ final class Tasks
             $lock = Database::isSqlite() ? '' : ' FOR UPDATE';
             $row = Database::one('SELECT * FROM provider_attempts WHERE token = ?' . $lock, [$token]);
             if ($row === null || $row['status'] !== 'pending' || $row['expires_at'] < now()
+                || ($row['provider'] === 'yeujob' && str_starts_with($row['remote_id'], 'v2:') && $proof !== 'admin_review')
                 || ($provider !== null && $row['provider'] !== $provider)
                 || time() - strtotime($row['created_at']) < (int)$row['min_seconds']) {
                 if ($ownsTransaction) {

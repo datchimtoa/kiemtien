@@ -9,7 +9,7 @@
   <?php foreach ($providers as $providerId => $definition):
     if (\App\Settings::getInt('provider_' . $providerId . '_enabled') !== 1) continue;
     $enabledProviders++;
-    $apiProof = in_array($providerId, ['yeujob', 'traffic24h'], true);
+    $apiProof = $providerId === 'traffic24h';
     $count = (int)($providerCounts[$providerId] ?? 0);
     $limit = \App\Providers\Tasks::setting($providerId, 'daily_limit');
     $wait = max(0, (int)$clickCooldown - (time() - strtotime($providerLastStart ?? '1970-01-01')));
@@ -25,7 +25,7 @@
       <div class="task-meta">
         <span class="pill <?= $ready ? 'ok' : 'warn' ?>"><?= $ready ? '✅ Khả dụng' : ($wait > 0 ? '⏳ Chờ ' . $wait . 's' : '🔒 Hết lượt 24h') ?></span>
         <span class="muted">Còn tối đa <?= max(0, $limit - $count) ?>/<?= $limit ?> lượt / 24h · tối thiểu <?= \App\Providers\Tasks::setting($providerId, 'min_seconds') ?>s</span>
-        <span class="muted"><?= $apiProof ? 'Xác minh qua API đối tác' : 'Chờ duyệt hoặc callback có xác thực' ?> · còn áp dụng giới hạn IP</span>
+        <span class="muted"><?= $providerId === 'yeujob' ? 'YeuJob V2: admin duyệt thưởng thủ công' : ($apiProof ? 'Xác minh qua API đối tác' : 'Chờ duyệt hoặc callback có xác thực') ?> · còn áp dụng giới hạn IP</span>
       </div>
       <form method="post" action="/tasks/provider/start" target="_blank" rel="noopener noreferrer" class="provider-start">
         <?= \App\Csrf::field() ?>
@@ -49,15 +49,18 @@
   <?php foreach ($providerAttempts as $attempt):
     $expired = $attempt['status'] === 'pending' && $attempt['expires_at'] < now();
     $status = $expired ? 'expired' : $attempt['status'];
-    $labels = ['creating' => 'Đang tạo', 'pending' => 'Chờ xác nhận', 'credited' => 'Đã cộng thưởng', 'rejected' => 'Đã từ chối', 'failed' => 'Tạo thất bại', 'expired' => 'Hết hạn']; ?>
+    $manualV2 = $attempt['provider'] === 'yeujob' && str_starts_with($attempt['remote_id'], 'v2:');
+    $labels = ['creating' => 'Đang tạo', 'pending' => $manualV2 ? 'Chờ admin duyệt' : 'Chờ xác nhận', 'credited' => 'Đã cộng thưởng', 'rejected' => 'Đã từ chối', 'failed' => 'Tạo thất bại', 'creation_failed' => 'Chưa tạo được', 'expired' => 'Hết hạn']; ?>
     <tr><td>#<?= (int)$attempt['id'] ?> · <?= e($providers[$attempt['provider']]['label'] ?? $attempt['provider']) ?><br><span class="muted"><?= e($attempt['service']) ?> · <?= e($attempt['created_at']) ?></span></td>
     <td><?= vnd($attempt['reward_vnd']) ?></td>
     <td><span class="pill <?= $status === 'credited' ? 'ok' : ($status === 'pending' ? 'pending' : 'warn') ?>"><?= e($labels[$status] ?? $status) ?></span></td><td>
     <?php if ($status === 'pending'): ?>
       <form method="post" action="/tasks/provider/verify">
-        <?= \App\Csrf::field() ?>
-        <input type="hidden" name="token" value="<?= e($attempt['token']) ?>">
-        <button class="btn" type="submit">Kiểm tra xác nhận</button>
+        <?php if (!$manualV2): ?>
+          <?= \App\Csrf::field() ?>
+          <input type="hidden" name="token" value="<?= e($attempt['token']) ?>">
+          <button class="btn" type="submit">Kiểm tra xác nhận</button>
+        <?php else: ?><span class="hint">Hoàn thành job rồi chờ admin đối chiếu; quay lại không tự cộng tiền.</span><?php endif; ?>
         <?php if ($attempt['short_url']): ?><a href="<?= e($attempt['short_url']) ?>" target="_blank" rel="noopener noreferrer">Tiếp tục nhiệm vụ</a><?php endif; ?>
       </form>
     <?php endif; ?>

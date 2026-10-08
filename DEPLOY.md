@@ -122,7 +122,7 @@ Cách sửa nhanh không cần curl: **Admin → 🩺 Chẩn đoán** → xem d�
 
 ### 3) Lưu ý kết nối Neon
 - Nên dùng **connection string trực tiếp** (`ep-xxx.<region>.aws.neon.tech`) thay vì endpoint **pooled** (`...-pooler...`): app PHP là web server chạy dài, còn pooled endpoint (PgBouncer transaction pooling) dễ xung đột với prepared statement của PDO → lỗi transaction khó lần.
-- Nếu buộc phải dùng pooled mà thấy lỗi transaction lạ, đổi sang direct là hết.
+- PDO PostgreSQL dùng `PGSQL_ATTR_DISABLE_PREPARES=true` và `ATTR_EMULATE_PREPARES=false`: bind tham số bằng `PQexecParams`, không tạo named statement hoặc gửi `DEALLOCATE` khi giải phóng statement. Cách này tránh phụ thuộc vòng đời statement giữa các backend của pooler, không bỏ transaction hay khóa hạn mức. Nếu vẫn gặp `25P02`, cần tìm lỗi đầu tiên trong log PostgreSQL; đổi sang direct chỉ là bước chẩn đoán, không bảo đảm sửa mọi lỗi transaction.
 
 ## Ghi chú
 - `config.php` **không** được commit (`.gitignore`). Dockerfile tự copy `config.sample.php` → `config.php` lúc build, và `config.sample.php` đọc từ env.

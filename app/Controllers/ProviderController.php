@@ -94,13 +94,14 @@ final class ProviderController
         }
         Database::begin();
         try {
+            $attemptId = Database::value('SELECT id FROM provider_attempts WHERE token = ?', [$token]);
             // Credit explicitly joins this transaction so the audit is atomic too.
             if ($action === 'approve') {
                 $ok = Tasks::credit($token, 'admin_review');
             } else {
                 $ok = Database::run("UPDATE provider_attempts SET status = 'rejected' WHERE token = ? AND status = 'pending'", [$token])->rowCount() > 0;
             }
-            Audit::log('admin', AdminAuth::id() ?? 0, 'provider_' . $action, $token, ['note' => $note, 'changed' => $ok]);
+            Audit::log('admin', AdminAuth::id() ?? 0, 'provider_' . $action, 'pv:' . (int)$attemptId, ['note' => $note, 'changed' => $ok]);
             Database::commit();
             Session::flash('success', $ok ? 'Đã xử lý nhiệm vụ.' : 'Nhiệm vụ không còn khả dụng để xử lý.');
         } catch (\Throwable $e) {

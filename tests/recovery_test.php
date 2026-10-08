@@ -89,7 +89,7 @@ $check('lỗi không-phục-hồi vẫn được ném ra (không nuốt)', (stat
         Database::rollback();
         return false; // đáng lẽ phải ném lỗi
     } catch (\Throwable $e) {
-        Database::rollbackQuietly();
+        Database::rollback();
         return true;
     }
 })());
@@ -98,10 +98,32 @@ $check('DB vẫn dùng được ngay sau lỗi (request không chết)', (static
     try {
         Database::run('SELECT * FROM bang_khong_ton_tai_zzz');
     } catch (\Throwable $e) {
-        Database::rollbackQuietly();
+        Database::rollback();
     }
     return (int)Database::value('SELECT COUNT(*) FROM settings') > 0;
 })());
+
+Database::begin();
+Database::run("INSERT INTO settings(skey,svalue,updated_at) VALUES('rollback_probe','1',?)", [now()]);
+try {
+    Database::run('SELECT * FROM missing_transaction_probe');
+} catch (PDOException $e) {
+    // Deliberately swallow the original failure to test the safety latch.
+}
+try {
+    Database::run("INSERT INTO settings(skey,svalue,updated_at) VALUES('must_not_commit','1',?)", [now()]);
+    $check('remaining writes blocked after swallowed error', false);
+} catch (RuntimeException $e) {
+    $check('remaining writes blocked after swallowed error', true);
+}
+try {
+    Database::commit();
+    $check('failed transaction cannot report successful commit', false);
+} catch (RuntimeException $e) {
+    $check('failed transaction cannot report successful commit', true);
+}
+Database::rollback();
+$check('failed transaction leaves no partial writes', Database::value("SELECT COUNT(*) FROM settings WHERE skey IN ('rollback_probe','must_not_commit')") == 0);
 
 echo $fail === 0 ? "\nTẤT CẢ PASS\n" : "\n{$fail} TEST FAIL\n";
 exit($fail === 0 ? 0 : 1);

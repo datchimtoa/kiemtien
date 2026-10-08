@@ -75,3 +75,5 @@ h3{margin-top:0}
 .task-name{font-weight:700;line-height:1.35}
 .reward{color:#7ee2a8;font-weight:800;font-size:1.05rem;white-space:nowrap}
 .task-meta{display:flex;flex-direction:column;gap:6px;font-size:.85rem}
+.provider-start{margin-top:auto}.provider-start .btn{width:100%}
+@media(max-width:360px){.task-grid{grid-template-columns:minmax(0,1fr)}.task-top{flex-wrap:wrap}}

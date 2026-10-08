@@ -1,42 +1,75 @@
 <div class="page-head">
   <h2>🎯 Nhiệm vụ kiếm tiền</h2>
 </div>
-<div class="card">
-  <h3>Nhiệm vụ từ đối tác</h3>
+<section aria-labelledby="provider-heading">
+  <h3 id="provider-heading">Nhiệm vụ từ đối tác</h3>
   <p class="hint">Không cộng tiền chỉ vì quay lại. Phần thưởng chờ xác nhận API / postback có chữ ký hoặc admin kiểm tra. Không dùng nhiều tài khoản, chia sẻ link hay bỏ qua các bước.</p>
+  <div class="task-grid">
+  <?php $enabledProviders = 0; ?>
   <?php foreach ($providers as $providerId => $definition):
-    if (\App\Settings::getInt('provider_' . $providerId . '_enabled') !== 1) continue; ?>
-    <h4><?= e($definition['label']) ?></h4>
+    if (\App\Settings::getInt('provider_' . $providerId . '_enabled') !== 1) continue;
+    $enabledProviders++;
+    $apiProof = in_array($providerId, ['yeujob', 'traffic24h'], true);
+    $count = (int)($providerCounts[$providerId] ?? 0);
+    $limit = \App\Providers\Tasks::setting($providerId, 'daily_limit');
+    $wait = max(0, (int)$clickCooldown - (time() - strtotime($providerLastStart ?? '1970-01-01')));
+    $ready = $count < $limit && $wait === 0;
+    ?>
     <?php foreach ($definition['services'] as $service): if ($service['id'] === 'no_ads') continue;
       $reward = \App\Settings::getInt('provider_' . $providerId . '_service_' . $service['id'] . '_reward_vnd', \App\Providers\Tasks::setting($providerId, 'reward_vnd')); ?>
-      <form method="post" action="/tasks/provider/start" class="stack">
+    <article class="card task-card state-<?= $ready ? 'ok' : 'off' ?>">
+      <div class="task-top">
+        <span class="task-name"><?= e($definition['label']) ?><br><span class="muted hint"><?= e($service['label']) ?></span></span>
+        <span class="reward"><?= $reward > 0 ? vnd($reward) : e(\App\Providers\Tasks::setting($providerId, 'share_percent') . '% job') ?></span>
+      </div>
+      <div class="task-meta">
+        <span class="pill <?= $ready ? 'ok' : 'warn' ?>"><?= $ready ? '✅ Khả dụng' : ($wait > 0 ? '⏳ Chờ ' . $wait . 's' : '🔒 Hết lượt 24h') ?></span>
+        <span class="muted">Còn tối đa <?= max(0, $limit - $count) ?>/<?= $limit ?> lượt / 24h · tối thiểu <?= \App\Providers\Tasks::setting($providerId, 'min_seconds') ?>s</span>
+        <span class="muted"><?= $apiProof ? 'Xác minh qua API đối tác' : 'Chờ duyệt hoặc callback có xác thực' ?> · còn áp dụng giới hạn IP</span>
+      </div>
+      <form method="post" action="/tasks/provider/start" target="_blank" rel="noopener noreferrer" class="provider-start">
         <?= \App\Csrf::field() ?>
         <input type="hidden" name="provider" value="<?= e($providerId) ?>">
         <input type="hidden" name="service" value="<?= e($service['id']) ?>">
-        <button class="btn" type="submit"><?= e($service['label']) ?> · <?= $reward > 0 ? vnd($reward) : e(\App\Providers\Tasks::setting($providerId, 'share_percent') . '% thưởng job') ?></button>
+        <button class="btn" type="submit" <?= $ready ? '' : 'disabled' ?>><?= $ready ? '🚀 Bắt đầu' : 'Vui lòng thử lại sau' ?></button>
       </form>
+    </article>
     <?php endforeach; ?>
   <?php endforeach; ?>
-</div>
+  </div>
+  <?php if ($enabledProviders === 0): ?><div class="card"><p class="muted">Chưa có nguồn đối tác được bật. Vui lòng quay lại sau.</p></div><?php endif; ?>
+  <p class="hint muted">Bấm “Bắt đầu” để mở tab mới, hoàn thành hướng dẫn rồi tải lại trang này để xem lượt nhiệm vụ. Thời gian tối thiểu không phải bằng chứng hoàn thành.</p>
+</section>
 <?php if ($providerAttempts): ?>
 <div class="card">
   <h3>Lượt nhiệm vụ đối tác gần đây</h3>
-  <?php foreach ($providerAttempts as $attempt): ?>
-    <p>#<?= (int)$attempt['id'] ?> · <?= e($attempt['provider']) ?> / <?= e($attempt['service']) ?> · <?= vnd($attempt['reward_vnd']) ?> · <?= e($attempt['status']) ?></p>
-    <?php if ($attempt['status'] === 'pending'): ?>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Nhiệm vụ</th><th>Thưởng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+    <tbody>
+  <?php foreach ($providerAttempts as $attempt):
+    $expired = $attempt['status'] === 'pending' && $attempt['expires_at'] < now();
+    $status = $expired ? 'expired' : $attempt['status'];
+    $labels = ['creating' => 'Đang tạo', 'pending' => 'Chờ xác nhận', 'credited' => 'Đã cộng thưởng', 'rejected' => 'Đã từ chối', 'failed' => 'Tạo thất bại', 'expired' => 'Hết hạn']; ?>
+    <tr><td>#<?= (int)$attempt['id'] ?> · <?= e($providers[$attempt['provider']]['label'] ?? $attempt['provider']) ?><br><span class="muted"><?= e($attempt['service']) ?> · <?= e($attempt['created_at']) ?></span></td>
+    <td><?= vnd($attempt['reward_vnd']) ?></td>
+    <td><span class="pill <?= $status === 'credited' ? 'ok' : ($status === 'pending' ? 'pending' : 'warn') ?>"><?= e($labels[$status] ?? $status) ?></span></td><td>
+    <?php if ($status === 'pending'): ?>
       <form method="post" action="/tasks/provider/verify">
         <?= \App\Csrf::field() ?>
         <input type="hidden" name="token" value="<?= e($attempt['token']) ?>">
         <button class="btn" type="submit">Kiểm tra xác nhận</button>
-        <?php if ($attempt['short_url']): ?><a href="<?= e($attempt['short_url']) ?>" rel="noreferrer">Tiếp tục nhiệm vụ</a><?php endif; ?>
+        <?php if ($attempt['short_url']): ?><a href="<?= e($attempt['short_url']) ?>" target="_blank" rel="noopener noreferrer">Tiếp tục nhiệm vụ</a><?php endif; ?>
       </form>
     <?php endif; ?>
+    </td></tr>
   <?php endforeach; ?>
+    </tbody></table></div>
 </div>
 <?php endif; ?>
 <?php if (!$res['ok']): ?>
   <div class="card"><div class="flash error"><?= e($res['error']) ?></div></div>
 <?php else: ?>
+  <h3>Nhiệm vụ PubCrypto</h3>
   <div class="task-grid">
   <?php foreach ($res['tasks'] as $t):
     // Member chỉ thấy số VND họ nhận — KHÔNG hiển thị rate admin (USD) anywhere.

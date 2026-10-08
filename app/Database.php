@@ -132,25 +132,27 @@ final class Database
      */
     public static function run(string $sql, array $params = []): \PDOStatement
     {
+        if (self::$txnLost) {
+            throw new RuntimeException('Transaction failed; explicitly roll back before starting another operation');
+        }
         try {
             $stmt = self::pdo()->prepare($sql);
             $stmt->execute($params);
             return $stmt;
         } catch (PDOException $e) {
+            if (self::inTransaction()) {
+                // Constraint/syntax errors also abort PostgreSQL transactions.
+                self::$txnLost = true;
+                self::rollbackQuietly();
+                error_log('[db] transaction failed on: ' . self::shortSql($sql));
+                throw $e;
+            }
             if (!self::isRecoverable($e)) {
                 throw $e;
             }
             $state = (string)($e->errorInfo[0] ?? $e->getCode());
-            $wasInTxn = self::inTransaction();
-            // Never replay one statement from a multi-statement transaction in autocommit.
-            // The caller must retry the WHOLE operation after rollback.
-            if ($wasInTxn) {
-                self::$txnLost = true;
-                self::rollbackQuietly();
-                throw $e;
-            }
             error_log('[db] ' . $state . ' (' . $e->getMessage() . ') on: ' . self::shortSql($sql)
-                . ' — rollback + retry once' . ($wasInTxn ? ' (transaction was open)' : ''));
+                . ' — rollback + retry once');
             self::rollbackQuietly();
             $stmt = self::pdo()->prepare($sql);
             $stmt->execute($params);

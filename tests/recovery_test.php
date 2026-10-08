@@ -81,6 +81,25 @@ App\RateLimiter::clear($bucketId, 'test');
 $check('clear() mở lại lượt', App\RateLimiter::attempt($bucketId, 'test', 3, 60) === true);
 App\RateLimiter::clear($bucketId, 'test');
 
+echo "3b) Limiter lỗi không được chặn truy vấn đăng nhập tiếp theo\n";
+Database::begin();
+Database::run("INSERT INTO settings(skey,svalue,updated_at) VALUES('limiter_owner_probe','1',?)", [now()]);
+$check('limiter không rollback transaction của caller', App\RateLimiter::attempt('nested_probe', 'test', 3, 60)
+    && Database::inTransaction()
+    && Database::value("SELECT svalue FROM settings WHERE skey = 'limiter_owner_probe'") === '1');
+Database::rollback();
+Database::run('ALTER TABLE rate_buckets RENAME TO rate_buckets_unavailable');
+foreach (['admin_login', 'login_phone', 'login_ip'] as $name) {
+    $check($name . ' vẫn trả về fail-open khi bảng limiter thiếu', App\RateLimiter::attempt($name, 'test', 3, 60));
+    try {
+        $check($name . ' không để lại transaction hỏng', (int)Database::value('SELECT COUNT(*) FROM settings') > 0);
+    } catch (\Throwable $e) {
+        $check($name . ' không để lại transaction hỏng', false, $e->getMessage());
+        Database::rollback();
+    }
+}
+Database::run('ALTER TABLE rate_buckets_unavailable RENAME TO rate_buckets');
+
 echo "4) Lỗi 1 câu lệnh KHÔNG được giết các câu lệnh sau\n";
 $check('lỗi không-phục-hồi vẫn được ném ra (không nuốt)', (static function (): bool {
     Database::begin();

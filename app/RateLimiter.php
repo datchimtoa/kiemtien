@@ -21,8 +21,10 @@ final class RateLimiter
     {
         $bucket = self::key($name, $id);
         $now = time();
+        $ownsTransaction = false;
         try {
             Database::begin();
+            $ownsTransaction = true;
             $row = Database::one('SELECT hits, window_start FROM rate_buckets WHERE bucket = ?', [$bucket]);
             if ($row === null) {
                 Database::run('INSERT INTO rate_buckets(bucket, hits, window_start) VALUES(?, 1, ?)', [$bucket, $now]);
@@ -43,7 +45,16 @@ final class RateLimiter
             Database::commit();
             return true;
         } catch (\Throwable $e) {
-            Database::rollbackQuietly();
+            if ($ownsTransaction) {
+                // Explicitly abandon our operation, including Database's lost-transaction flag.
+                // Do not clear that flag globally: finance callers must still reject partial commits.
+                try {
+                    Database::rollback();
+                } catch (\Throwable $rollbackError) {
+                    error_log('[rate] rollback failed: ' . $rollbackError->getMessage());
+                    throw $e;
+                }
+            }
             error_log('[rate] limiter error for ' . $bucket . ': ' . $e->getMessage() . ' — fail-open');
             return true; // không chặn người dùng thật vì DB trục trặc
         }

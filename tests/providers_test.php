@@ -100,7 +100,7 @@ check('approved paid job shares VND once', Tasks::poll($uid, $job['token']) && W
 age($job['token']);
 Settings::set('provider_yeujob_daily_limit', '100');
 Settings::set('provider_yeujob_ip_daily_limit', '100');
-Database::run("CREATE TRIGGER fail_provider_cleanup BEFORE UPDATE OF status ON provider_attempts WHEN NEW.status = 'failed' BEGIN SELECT RAISE(ABORT, 'injected cleanup failure'); END");
+Database::run("CREATE TRIGGER fail_provider_cleanup BEFORE UPDATE OF status ON provider_attempts WHEN NEW.status IN ('failed', 'creation_failed') BEGIN SELECT RAISE(ABORT, 'injected cleanup failure'); END");
 Http::fake(fn() => ['body' => json_encode(['success' => false])]);
 try {
     Tasks::start($uid, 'yeujob', 'friend');
@@ -126,6 +126,7 @@ try {
         && str_contains($e->getPrevious()->getMessage(), 'injected pending failure'));
 }
 check('YeuJob SQL failure leaves database usable and wallet unchanged', !Database::inTransaction() && Wallet::balance($uid) === 4050);
+check('failure after remote acceptance retains daily reservation', Database::value('SELECT status FROM provider_attempts WHERE user_id = ? ORDER BY id DESC LIMIT 1', [$uid]) === 'failed');
 Database::run('DROP TRIGGER fail_provider_pending');
 
 $_SERVER['REMOTE_ADDR'] = '203.0.113.21';
@@ -213,5 +214,29 @@ foreach (Catalog::definitions() as $providerId => $definition) {
     $data = Client::call($providerId, $definition['shorten'], ['url' => 'https://example.test/task/return/test', 'service' => $service['id'], 'service_type' => $service['type'] ?? '']);
     check('response mapping ' . $providerId, Client::safeLink($providerId, Http::any($data, $definition['shorten']['result'])) !== '');
 }
+Http::fake(null);
+
+// Definite pre-accept failures release daily slots, but retain anti-spam history.
+Database::run('INSERT INTO users(phone,password_hash,created_at,updated_at) VALUES(?,?,?,?)', ['84933333333', 'test', now(), now()]);
+$quotaUser = Database::lastId();
+$_SERVER['REMOTE_ADDR'] = '203.0.113.99';
+Settings::set('provider_yeujob_daily_limit', '1');
+Settings::set('provider_yeujob_ip_daily_limit', '1');
+Http::fake(fn() => ['body' => json_encode(['success' => true, 'data' => []])]);
+rejects('empty job list rejects creation', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
+$failedToken = Database::value('SELECT token FROM provider_attempts WHERE user_id = ?', [$quotaUser]);
+check('empty job list releases daily reservation', Database::value('SELECT status FROM provider_attempts WHERE token = ?', [$failedToken]) === 'creation_failed');
+rejects('released reservation still enforces cooldown', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
+age($failedToken);
+Http::fake(function ($method) {
+    return ['body' => json_encode($method === 'POST'
+        ? ['success' => true, 'data' => ['application_id' => 'quota-retry-job', 'friend_url' => 'https://yeujob.com/friend-review.php?t=quota', 'reward' => 5000]]
+        : ['success' => true, 'data' => [['id' => 125, 'slots_left' => 1]]])];
+});
+$quotaJob = Tasks::start($quotaUser, 'yeujob', 'friend');
+check('released user and IP slot allows successful retry', Database::value('SELECT status FROM provider_attempts WHERE token = ?', [$quotaJob['token']]) === 'pending');
+age($quotaJob['token']);
+rejects('successful reservation still consumes daily slot', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
+check('released and pending attempts do not pay without proof', Wallet::balance($quotaUser) === 0);
 Http::fake(null);
 exit($failures === 0 ? 0 : 1);

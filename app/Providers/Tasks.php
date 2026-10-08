@@ -20,7 +20,7 @@ final class Tasks
         return hash('sha256', session_id() . '|' . user_agent());
     }
 
-    /** Reserve quotas before calling any remote API; failures consume a start slot. */
+    /** Reserve quotas before remote calls; release only definite pre-submission failures. */
     public static function start(int $userId, string $provider, string $service): array
     {
         $def = Catalog::get($provider);
@@ -59,8 +59,8 @@ final class Tasks
                 throw new \RuntimeException('Tài khoản không đủ điều kiện làm nhiệm vụ.');
             }
             $since = date('Y-m-d H:i:s', time() - 86400);
-            $userCount = (int)Database::value('SELECT COUNT(*) FROM provider_attempts WHERE provider = ? AND user_id = ? AND created_at >= ?', [$provider, $userId, $since]);
-            $ipCount = (int)Database::value('SELECT COUNT(*) FROM provider_attempts WHERE provider = ? AND ip = ? AND created_at >= ?', [$provider, $ip, $since]);
+            $userCount = (int)Database::value("SELECT COUNT(*) FROM provider_attempts WHERE provider = ? AND user_id = ? AND created_at >= ? AND status <> 'creation_failed'", [$provider, $userId, $since]);
+            $ipCount = (int)Database::value("SELECT COUNT(*) FROM provider_attempts WHERE provider = ? AND ip = ? AND created_at >= ? AND status <> 'creation_failed'", [$provider, $ip, $since]);
             $hourCount = (int)Database::value('SELECT COUNT(*) FROM provider_attempts WHERE user_id = ? AND created_at >= ?', [$userId, date('Y-m-d H:i:s', time() - 3600)]);
             $last = Database::value('SELECT MAX(created_at) FROM provider_attempts WHERE user_id = ?', [$userId]);
             if ($userCount >= self::setting($provider, 'daily_limit') || $ipCount >= self::setting($provider, 'ip_daily_limit')
@@ -78,8 +78,12 @@ final class Tasks
             Database::rollback();
             throw $e;
         }
+        $remoteRequested = false;
         try {
             $vars = ['url' => $destination, 'service' => $service, 'service_type' => $selected['type'] ?? '', 'title' => $selected['label']];
+            if (Settings::get('provider_' . $provider . '_api_key', '') === '') {
+                throw new \RuntimeException('Chưa cấu hình API key hợp lệ.');
+            }
             if ($def['kind'] === 'job') {
                 $list = Client::call($provider, $def['job']['list']);
                 $items = Http::pick($list, $def['job']['list']['items']);
@@ -96,6 +100,7 @@ final class Tasks
                 if ($job === null) {
                     throw new \RuntimeException('Chưa có job còn lượt.');
                 }
+                $remoteRequested = true;
                 $data = Client::call($provider, $def['job']['accept'], ['job_id' => $job['id']]);
                 $link = Client::safeLink($provider, Http::pick($data, 'data.friend_url'));
                 $remote = (string)Http::pick($data, 'data.application_id');
@@ -106,6 +111,7 @@ final class Tasks
                 $reward = $reward > 0 ? $reward : intdiv((int)$gross * $share, 100);
             } else {
                 $vars['alias'] = substr($token, 0, 20);
+                $remoteRequested = true;
                 $data = Client::call($provider, $def['shorten'], $vars);
                 $link = Client::safeLink($provider, Http::any($data, $def['shorten']['result']));
                 $remote = (string)(Http::any($data, $def['shorten']['code'] ?? []) ?? basename((string)parse_url($link, PHP_URL_PATH)));
@@ -123,7 +129,7 @@ final class Tasks
             return ['token' => $token, 'redirect' => $link];
         } catch (\Throwable $e) {
             try {
-                Database::run("UPDATE provider_attempts SET status = 'failed' WHERE token = ? AND status = 'creating'", [$token]);
+                Database::run("UPDATE provider_attempts SET status = ? WHERE token = ? AND status = 'creating'", [$remoteRequested ? 'failed' : 'creation_failed', $token]);
             } catch (\Throwable $cleanupError) {
                 // Cleanup is best-effort; never replace the original provider/SQL failure.
                 error_log('[provider start] failed-state cleanup: ' . $cleanupError->getMessage());

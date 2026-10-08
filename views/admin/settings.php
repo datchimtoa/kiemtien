@@ -81,6 +81,7 @@
         <label class="check"><input type="checkbox" name="<?= e($prefix) ?>enabled" value="1" <?= ($settings[$prefix . 'enabled'] ?? '0') === '1' ? 'checked' : '' ?>> Bật nguồn</label>
         <label>API key (trống = giữ nguyên)<input type="password" autocomplete="new-password" name="<?= e($prefix) ?>api_key" value=""></label>
         <label>Callback HMAC secret (tùy chọn, ≥32 ký tự, trống = giữ nguyên)<input type="password" autocomplete="new-password" name="<?= e($prefix) ?>callback_secret" value=""></label>
+        <p class="hint">Không phải API key. Chỉ cấu hình khóa bí mật dùng chung với server provider khi họ hỗ trợ đúng giao thức callback; nếu chưa hỗ trợ thì không cần nhập. HMAC không dùng để tạo nhiệm vụ.</p>
         <p class="hint">Endpoint S2S tùy chọn: /postback/provider/<?= e($providerId) ?> — chỉ dùng nếu provider hỗ trợ hợp đồng chữ ký trong PROVIDERS.md, không phải URL quay lại.</p>
         <?php foreach (['reward_vnd' => ['Thưởng mặc định (VND)', 0, 2000000], 'share_percent' => ['% thưởng YeuJob khi VND = 0', 0, 100], 'daily_limit' => ['Lượt bắt đầu / tài khoản / 24h', 1, 1000], 'ip_daily_limit' => ['Lượt bắt đầu / IP / 24h', 1, 1000], 'min_seconds' => ['Thời gian tối thiểu (giây)', 1, 86400]] as $field => [$label, $min, $max]): ?>
           <label><?= e($label) ?><input type="number" min="<?= $min ?>" max="<?= $max ?>" name="<?= e($prefix . $field) ?>" value="<?= e($settings[$prefix . $field] ?? $definition['defaults'][$field] ?? 70) ?>" required></label>

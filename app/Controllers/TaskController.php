@@ -23,7 +23,7 @@ final class TaskController
             'res'    => $res,
             'providers' => \App\Providers\Catalog::definitions(),
             'providerAttempts' => Database::all('SELECT * FROM provider_attempts WHERE user_id = ? ORDER BY id DESC LIMIT 30', [(int)$user['id']]),
-            'providerCounts' => array_column(Database::all('SELECT provider, COUNT(*) AS starts FROM provider_attempts WHERE user_id = ? AND created_at >= ? GROUP BY provider', [(int)$user['id'], date('Y-m-d H:i:s', time() - 86400)]), 'starts', 'provider'),
+            'providerCounts' => array_column(Database::all("SELECT provider, COUNT(*) AS starts FROM provider_attempts WHERE user_id = ? AND created_at >= ? AND status <> 'creation_failed' GROUP BY provider", [(int)$user['id'], date('Y-m-d H:i:s', time() - 86400)]), 'starts', 'provider'),
             'providerLastStart' => Database::value('SELECT MAX(created_at) FROM provider_attempts WHERE user_id = ?', [(int)$user['id']]),
             'clickCooldown' => (int)\App\Settings::get('task_click_cooldown_seconds', '20'),
         ], 'member');

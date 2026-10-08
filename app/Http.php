@@ -34,6 +34,9 @@ final class Http
             ];
         }
 
+        if (!function_exists('curl_init')) {
+            throw new \RuntimeException('Máy chủ thiếu PHP extension cURL. Cần rebuild bản Docker đã cài extension curl.');
+        }
         $headers = $opt['headers'] ?? [];
         $body = $opt['body'] ?? null;
         if (is_array($body)) {

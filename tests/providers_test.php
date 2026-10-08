@@ -266,5 +266,26 @@ Settings::set('task_max_completions_per_hour', '30');
 Database::run('UPDATE provider_attempts SET created_at = ? WHERE token = ?', [now(), $quotaJob['token']]);
 rejectsWith('cooldown block reports remaining seconds', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'giây trước khi bắt đầu');
 check('diagnostic blocks do not reserve additional attempts', (int)Database::value('SELECT COUNT(*) FROM provider_attempts WHERE user_id = ?', [$quotaUser]) === 2);
+age($quotaJob['token']);
+Settings::set('provider_yeujob_api_key', '');
+rejectsWith('missing key has actionable pre-submission message', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'Chưa gửi yêu cầu nhận job: Chưa cấu hình API key');
+Settings::set('provider_yeujob_api_key', 'test-key');
+Database::run('UPDATE provider_attempts SET created_at = ? WHERE user_id = ?', [date('Y-m-d H:i:s', time() - 120), $quotaUser]);
+Http::fake(fn() => ['body' => json_encode(['success' => true, 'data' => []])]);
+rejectsWith('empty list has actionable pre-submission message', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'Chưa gửi yêu cầu nhận job: Chưa có job còn lượt.');
+foreach ([0, 401, 403, 429, 500] as $status) {
+    Http::fake(fn() => ['ok' => false, 'http' => $status, 'body' => json_encode(['message' => 'test-key private body'])]);
+    try {
+        Client::call('yeujob', Catalog::get('yeujob')['job']['list']);
+        check('HTTP failure rejected ' . $status, false);
+    } catch (RuntimeException $e) {
+        check('HTTP diagnostic safe and actionable ' . $status, !str_contains($e->getMessage(), 'test-key')
+            && !str_contains($e->getMessage(), 'private body')
+            && str_contains($e->getMessage(), $status === 0 ? 'Không kết nối' : 'HTTP ' . $status));
+    }
+}
 Http::fake(null);
+if (!function_exists('curl_init')) {
+    rejectsWith('missing PHP curl reports deployment requirement', fn() => Http::request('GET', 'https://example.test'), 'thiếu PHP extension cURL');
+}
 exit($failures === 0 ? 0 : 1);

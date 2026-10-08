@@ -34,6 +34,16 @@ final class Client
             'ok_path' => $ok['path'] ?? '', 'ok_values' => $ok['values'] ?? [true],
         ])) {
             // Never expose upstream responses, which may contain credentials/URLs.
+            if (!$response['ok']) {
+                $status = (int)$response['http'];
+                $reason = match (true) {
+                    $status === 0 => 'Không kết nối được API nhà cung cấp (mạng, TLS hoặc timeout).',
+                    $status === 401 || $status === 403 => "API nhà cung cấp từ chối truy cập (HTTP {$status}); cần kiểm tra API key và quyền truy cập.",
+                    $status === 429 => 'API nhà cung cấp đang giới hạn tần suất (HTTP 429).',
+                    default => "API nhà cung cấp trả lỗi HTTP {$status} hoặc phản hồi không phải JSON hợp lệ.",
+                };
+                throw new \RuntimeException($reason);
+            }
             throw new \RuntimeException('Nhà cung cấp chưa xác nhận yêu cầu. Vui lòng thử lại sau.');
         }
         return $response['data'];

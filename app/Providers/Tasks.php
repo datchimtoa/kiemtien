@@ -145,7 +145,12 @@ final class Tasks
                 // Cleanup is best-effort; never replace the original provider/SQL failure.
                 error_log('[provider start] failed-state cleanup: ' . $cleanupError->getMessage());
             }
-            throw new \RuntimeException('Không tạo được nhiệm vụ. Vui lòng thử lại sau.', 0, $e);
+            // Before submission these runtime messages come from our validation/client,
+            // never raw response bodies. Keep SQL and unexpected errors private.
+            $message = !$remoteRequested && get_class($e) === \RuntimeException::class
+                ? 'Chưa gửi yêu cầu nhận job: ' . $e->getMessage()
+                : 'Không tạo được nhiệm vụ. Vui lòng thử lại sau.';
+            throw new \RuntimeException($message, 0, $e);
         }
     }
 

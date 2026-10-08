@@ -96,6 +96,38 @@ $paid = true;
 check('approved paid job shares VND once', Tasks::poll($uid, $job['token']) && Wallet::balance($uid) === 4050);
 
 // Signed callbacks must bind provider, token and remote ID; amounts are ignored.
+// A failed cleanup must never replace the first error when creating a YeuJob task.
+age($job['token']);
+Settings::set('provider_yeujob_daily_limit', '100');
+Settings::set('provider_yeujob_ip_daily_limit', '100');
+Database::run("CREATE TRIGGER fail_provider_cleanup BEFORE UPDATE OF status ON provider_attempts WHEN NEW.status = 'failed' BEGIN SELECT RAISE(ABORT, 'injected cleanup failure'); END");
+Http::fake(fn() => ['body' => json_encode(['success' => false])]);
+try {
+    Tasks::start($uid, 'yeujob', 'friend');
+    check('YeuJob creation failure propagates', false);
+} catch (Throwable $e) {
+    check('YeuJob cleanup preserves original provider error', $e->getPrevious() !== null
+        && $e->getPrevious()->getMessage() === 'Nhà cung cấp chưa xác nhận yêu cầu. Vui lòng thử lại sau.');
+}
+check('failed YeuJob creation never pays', Wallet::balance($uid) === 4050);
+Database::run('DROP TRIGGER fail_provider_cleanup');
+Database::run('UPDATE provider_attempts SET created_at = ? WHERE user_id = ?', [date('Y-m-d H:i:s', time() - 120), $uid]);
+Database::run("CREATE TRIGGER fail_provider_pending BEFORE UPDATE OF status ON provider_attempts WHEN NEW.status = 'pending' BEGIN SELECT RAISE(ABORT, 'injected pending failure'); END");
+Http::fake(function ($method) {
+    return ['body' => json_encode($method === 'POST'
+        ? ['success' => true, 'data' => ['application_id' => 'sql-failure-job', 'friend_url' => 'https://yeujob.com/friend-review.php?t=test', 'reward' => 5000]]
+        : ['success' => true, 'data' => [['id' => 124, 'slots_left' => 1]]])];
+});
+try {
+    Tasks::start($uid, 'yeujob', 'friend');
+    check('YeuJob pending SQL failure propagates', false);
+} catch (Throwable $e) {
+    check('YeuJob preserves first SQL failure', $e->getPrevious() instanceof PDOException
+        && str_contains($e->getPrevious()->getMessage(), 'injected pending failure'));
+}
+check('YeuJob SQL failure leaves database usable and wallet unchanged', !Database::inTransaction() && Wallet::balance($uid) === 4050);
+Database::run('DROP TRIGGER fail_provider_pending');
+
 $_SERVER['REMOTE_ADDR'] = '203.0.113.21';
 Http::fake(fn() => ['body' => json_encode(['status' => 'success', 'shortenedUrl' => 'https://link999.app/unique-test'])]);
 $link = Tasks::start($other, 'link999', 'default'); age($link['token']);

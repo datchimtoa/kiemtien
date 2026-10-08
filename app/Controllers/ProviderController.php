@@ -24,7 +24,18 @@ final class ProviderController
             $result = Tasks::start((int)$user['id'], (string)input('provider', ''), (string)input('service', ''));
             redirect($result['redirect']);
         } catch (\Throwable $e) {
-            Session::flash('error', $e->getMessage());
+            $cause = $e;
+            while ($cause->getPrevious() !== null) {
+                $cause = $cause->getPrevious();
+            }
+            if ($cause instanceof \PDOException) {
+                $ref = strtoupper(bin2hex(random_bytes(4)));
+                app_log('provider', 'ref=' . $ref . ' start database failure: ' . $cause->getMessage()
+                    . ' @ ' . $cause->getFile() . ':' . $cause->getLine() . "\n" . $cause->getTraceAsString());
+                Session::flash('error', 'Không tạo được nhiệm vụ do lỗi hệ thống. Mã lỗi: ' . $ref . '. Vui lòng gửi mã này cho hỗ trợ.');
+            } else {
+                Session::flash('error', $e->getMessage());
+            }
             redirect('/tasks');
         }
     }

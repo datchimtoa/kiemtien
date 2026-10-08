@@ -122,7 +122,12 @@ final class Tasks
             Database::run("UPDATE provider_attempts SET status = 'pending', remote_id = ?, short_url = ?, reward_vnd = ? WHERE token = ? AND status = 'creating'", [$remote, $link, $reward, $token]);
             return ['token' => $token, 'redirect' => $link];
         } catch (\Throwable $e) {
-            Database::run("UPDATE provider_attempts SET status = 'failed' WHERE token = ? AND status = 'creating'", [$token]);
+            try {
+                Database::run("UPDATE provider_attempts SET status = 'failed' WHERE token = ? AND status = 'creating'", [$token]);
+            } catch (\Throwable $cleanupError) {
+                // Cleanup is best-effort; never replace the original provider/SQL failure.
+                error_log('[provider start] failed-state cleanup: ' . $cleanupError->getMessage());
+            }
             throw new \RuntimeException('Không tạo được nhiệm vụ. Vui lòng thử lại sau.', 0, $e);
         }
     }

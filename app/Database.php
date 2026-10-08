@@ -144,7 +144,7 @@ final class Database
                 // Constraint/syntax errors also abort PostgreSQL transactions.
                 self::$txnLost = true;
                 self::rollbackQuietly();
-                error_log('[db] transaction failed on: ' . self::shortSql($sql));
+                error_log('[db] transaction failed (' . $e->getMessage() . ') on: ' . self::shortSql($sql));
                 throw $e;
             }
             if (!self::isRecoverable($e)) {

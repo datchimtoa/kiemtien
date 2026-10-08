@@ -65,14 +65,20 @@ if (!function_exists('client_ip')) {
         // Forwarded IPs are attacker-controlled unless the immediate peer is trusted.
         $peer = (string)($_SERVER['REMOTE_ADDR'] ?? '');
         $trusted = config('trusted_proxy_ips', []);
-        $headers = is_array($trusted) && in_array($peer, $trusted, true)
-            ? ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR'] : [];
-        foreach ($headers as $h) {
-            if (!empty($_SERVER[$h])) {
-                $first = trim(explode(',', (string)$_SERVER[$h])[0]);
-                if (filter_var($first, FILTER_VALIDATE_IP)) {
-                    return substr($first, 0, 64);
+        if (is_array($trusted) && in_array($peer, $trusted, true)
+            && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            // Walk from the trusted peer, not the attacker-controlled leftmost value.
+            $chain = array_map('trim', explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']));
+            $valid = count($chain) <= 32;
+            foreach ($chain as $address) {
+                $valid = $valid && filter_var($address, FILTER_VALIDATE_IP) !== false;
+            }
+            if ($valid) {
+                $address = $peer;
+                while ($chain !== [] && in_array($address, $trusted, true)) {
+                    $address = array_pop($chain);
                 }
+                return $address;
             }
         }
         $ip = $_SERVER['REMOTE_ADDR'] ?? '';

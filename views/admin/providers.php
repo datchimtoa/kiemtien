@@ -5,6 +5,7 @@
   <?php foreach ($attempts as $attempt): ?>
     <fieldset>
       <legend>#<?= (int)$attempt['id'] ?> · User <?= (int)$attempt['user_id'] ?> · <?= e($attempt['provider']) ?></legend>
+      <p>Tài khoản: <?= e($attempt['user_phone'] ?? 'Không tìm thấy') ?> · <?= e($attempt['user_full_name'] ?? '') ?> · ID <?= (int)$attempt['user_id'] ?></p>
       <p><?= e($attempt['service']) ?> · <?= vnd($attempt['reward_vnd']) ?> · <?= e($attempt['status']) ?></p>
       <p>Mã provider: <?= e($attempt['remote_id']) ?> · IP: <?= e($attempt['ip']) ?> · Bắt đầu: <?= e($attempt['created_at']) ?> · Quay lại: <?= e($attempt['returned_at'] ?? 'Chưa') ?></p>
       <?php if ($attempt['status'] === 'pending'): ?>

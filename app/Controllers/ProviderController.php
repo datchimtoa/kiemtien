@@ -89,7 +89,7 @@ final class ProviderController
     public static function review(): void
     {
         AdminAuth::require();
-        View::show('admin/providers', ['attempts' => Database::all('SELECT * FROM provider_attempts ORDER BY id DESC LIMIT 100'), 'providers' => Catalog::definitions()], 'admin');
+        View::show('admin/providers', ['attempts' => Database::all('SELECT p.*, u.phone AS user_phone, u.full_name AS user_full_name FROM provider_attempts p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.id DESC LIMIT 100'), 'providers' => Catalog::definitions()], 'admin');
     }
 
     public static function decide(): void

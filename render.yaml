@@ -13,6 +13,10 @@ services:
         value: telegram
       - key: APP_ENV
         value: production
+      # Trust only the local ingress observed by PHP, never arbitrary remote peers.
+      # Ingress must overwrite X-Forwarded-For or append the actual connecting IP.
+      - key: TRUSTED_PROXY_IPS
+        value: 127.0.0.1,::1
       # Domain chính — PHẢI là www (apex htxg.pro bị 307 redirect → webhook/postback mất).
       - key: BASE_URL
         value: https://www.htxg.pro

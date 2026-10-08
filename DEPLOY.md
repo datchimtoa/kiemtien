@@ -125,6 +125,7 @@ Cách sửa nhanh không cần curl: **Admin → 🩺 Chẩn đoán** → xem d�
 - PDO PostgreSQL dùng `PGSQL_ATTR_DISABLE_PREPARES=true` và `ATTR_EMULATE_PREPARES=false`: bind tham số bằng `PQexecParams`, không tạo named statement hoặc gửi `DEALLOCATE` khi giải phóng statement. Cách này tránh phụ thuộc vòng đời statement giữa các backend của pooler, không bỏ transaction hay khóa hạn mức. Nếu vẫn gặp `25P02`, cần tìm lỗi đầu tiên trong log PostgreSQL; đổi sang direct chỉ là bước chẩn đoán, không bảo đảm sửa mọi lỗi transaction.
 
 ## Ghi chú
+- **IP người dùng sau ingress:** nếu PHP thấy `REMOTE_ADDR=127.0.0.1`, đặt Render Environment `TRUSTED_PROXY_IPS=127.0.0.1,::1` rồi deploy lại (Blueprint mới đã có cấu hình này). Chỉ tin địa chỉ proxy trực tiếp đã kiểm chứng; ingress phải ghi đè `X-Forwarded-For` hoặc nối IP kết nối thật vào cuối. App duyệt chuỗi từ phải sang trái và dừng tại IP không được tin cậy, không dùng tùy ý IP đầu chuỗi hoặc `CF-Connecting-IP`. Nếu kết quả vẫn là IP nội bộ, cần xác minh header/chuỗi ingress thực tế trước khi thêm proxy; không dùng wildcard. Bản ghi cũ IP loopback không được tự sửa hoặc xóa; chúng vẫn có thể chiếm hạn mức tài khoản và cần đối soát.
 - `config.php` **không** được commit (`.gitignore`). Dockerfile tự copy `config.sample.php` → `config.php` lúc build, và `config.sample.php` đọc từ env.
 - `.dockerignore` chặn `config.php`, `storage/`, `secret.md` vào image → tránh lộ secret/user data.
 - **Bảo mật:** token GitHub đã từng dán vào chat → nên **revoke và tạo token mới**.

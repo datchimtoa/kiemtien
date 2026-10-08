@@ -140,7 +140,7 @@ try {
     check('YeuJob creation failure propagates', false);
 } catch (Throwable $e) {
     check('YeuJob cleanup preserves original provider error', $e->getPrevious() !== null
-        && $e->getPrevious()->getMessage() === 'Nhà cung cấp chưa xác nhận yêu cầu. Vui lòng thử lại sau.');
+        && str_contains($e->getPrevious()->getMessage(), 'success không hợp lệ'));
 }
 check('failed YeuJob creation never pays', Wallet::balance($uid) === 4050);
 Database::run('DROP TRIGGER fail_provider_cleanup');
@@ -286,8 +286,19 @@ rejectsWith('missing key has actionable pre-submission message', fn() => Tasks::
 Settings::set('provider_yeujob_api_key', 'test-key');
 Database::run('UPDATE provider_attempts SET created_at = ? WHERE user_id = ?', [date('Y-m-d H:i:s', time() - 120), $quotaUser]);
 Http::fake(fn() => ['body' => json_encode(['success' => true, 'data' => []])]);
-rejects('missing V2 shortenedUrl rejects creation', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'));
+rejectsWith('missing V2 shortenedUrl is actionable', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'API nhà cung cấp không trả link hợp lệ');
 check('invalid V2 response keeps submitted reservation', Database::value('SELECT status FROM provider_attempts WHERE user_id = ? ORDER BY id DESC LIMIT 1', [$quotaUser]) === 'failed');
+Database::run('UPDATE provider_attempts SET created_at = ? WHERE user_id = ?', [date('Y-m-d H:i:s', time() - 120), $quotaUser]);
+Http::fake(fn() => ['ok' => false, 'http' => 403, 'body' => 'test-key private body']);
+rejectsWith('submitted V2 HTTP failure keeps safe diagnostic', fn() => Tasks::start($quotaUser, 'yeujob', 'friend'), 'HTTP 403');
+Database::run('UPDATE provider_attempts SET created_at = ? WHERE user_id = ?', [date('Y-m-d H:i:s', time() - 120), $quotaUser]);
+Http::fake(function () { throw new RuntimeException('test-key private unexpected error'); });
+try {
+    Tasks::start($quotaUser, 'yeujob', 'friend');
+    check('unexpected error remains private with reference', false);
+} catch (RuntimeException $e) {
+    check('unexpected error remains private with reference', !str_contains($e->getMessage(), 'test-key') && str_contains($e->getMessage(), 'Mã lỗi:'));
+}
 foreach ([0, 401, 403, 429, 500] as $status) {
     Http::fake(fn() => ['ok' => false, 'http' => $status, 'body' => json_encode(['message' => 'test-key private body'])]);
     try {

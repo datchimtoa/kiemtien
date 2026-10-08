@@ -156,10 +156,18 @@ final class Tasks
             }
             // Before submission these runtime messages come from our validation/client,
             // never raw response bodies. Keep SQL and unexpected errors private.
-            $message = !$remoteRequested && get_class($e) === \RuntimeException::class
+            $ref = strtoupper(bin2hex(random_bytes(4)));
+            // Do not log exception arguments/messages from unexpected errors: URLs
+            // can contain API keys. Only RequestException messages are safe.
+            app_log('provider', 'ref=' . $ref . ' provider=' . $provider . ' submitted=' . (int)$remoteRequested
+                . ' cause=' . get_class($e) . ' @ ' . $e->getFile() . ':' . $e->getLine()
+                . ($e instanceof RequestException ? ' reason=' . $e->getMessage() : ''));
+            $message = $e instanceof RequestException
+                ? 'Không tạo được nhiệm vụ: ' . $e->getMessage()
+                : (!$remoteRequested && get_class($e) === \RuntimeException::class
                 ? 'Chưa gửi yêu cầu nhận job: ' . $e->getMessage()
-                : 'Không tạo được nhiệm vụ. Vui lòng thử lại sau.';
-            throw new \RuntimeException($message, 0, $e);
+                : 'Không tạo được nhiệm vụ. Vui lòng thử lại sau.');
+            throw new \RuntimeException($message . ' Mã lỗi: ' . $ref . '.', 0, $e);
         }
     }
 

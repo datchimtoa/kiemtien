@@ -49,7 +49,7 @@
   <?php foreach ($providerAttempts as $attempt):
     $expired = $attempt['status'] === 'pending' && $attempt['expires_at'] < now();
     $status = $expired ? 'expired' : $attempt['status'];
-    $manualV2 = $attempt['provider'] === 'yeujob' && str_starts_with($attempt['remote_id'], 'v2:');
+    $manualV2 = $attempt['provider'] === 'yeujob' && str_starts_with((string)($attempt['remote_id'] ?? ''), 'v2:');
     $labels = ['creating' => 'Đang tạo', 'pending' => $manualV2 ? 'Chờ admin duyệt' : 'Chờ xác nhận', 'credited' => 'Đã cộng thưởng', 'rejected' => 'Đã từ chối', 'failed' => 'Tạo thất bại', 'creation_failed' => 'Chưa tạo được', 'expired' => 'Hết hạn']; ?>
     <tr><td>#<?= (int)$attempt['id'] ?> · <?= e($providers[$attempt['provider']]['label'] ?? $attempt['provider']) ?><br><span class="muted"><?= e($attempt['service']) ?> · <?= e($attempt['created_at']) ?></span></td>
     <td><?= vnd($attempt['reward_vnd']) ?></td>

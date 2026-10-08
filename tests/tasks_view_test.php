@@ -42,6 +42,23 @@ $data['providerAttempts'] = [[
 $html = View::render('tasks/index', $data, null);
 $check('V2 pending shows manual review without poll button', str_contains($html, 'Chờ admin duyệt') && !str_contains($html, 'Kiểm tra xác nhận'));
 $data['providerAttempts'] = [];
+$data['providerAttempts'] = [[
+    'id' => 2, 'provider' => 'yeujob', 'service' => 'friend', 'remote_id' => null,
+    'status' => 'failed', 'expires_at' => date('Y-m-d H:i:s', time() + 3600),
+    'created_at' => now(), 'reward_vnd' => 400, 'token' => str_repeat('b', 64), 'short_url' => null,
+]];
+set_error_handler(static function ($severity, $message, $file, $line) {
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
+try {
+    $html = View::render('tasks/index', $data, null);
+    $check('failed YeuJob with null remote ID renders without warnings', str_contains($html, 'Tạo thất bại'));
+    $html = View::render('admin/providers', ['attempts' => [array_merge($data['providerAttempts'][0], ['user_id' => 1, 'ip' => '203.0.113.1'])]], null);
+    $check('admin failed YeuJob with null remote ID renders without warnings', str_contains($html, 'failed'));
+} finally {
+    restore_error_handler();
+}
+$data['providerAttempts'] = [];
 $data['providerLastStart'] = now();
 $html = View::render('tasks/index', $data, null);
 $check('cooldown disables start buttons', str_contains($html, 'disabled') && !str_contains($html, 'state-ok'));

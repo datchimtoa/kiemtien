@@ -12,7 +12,7 @@ final class Client
     {
         $vars['key'] = Settings::get('provider_' . $provider . '_api_key', '');
         if ($vars['key'] === '' || preg_match('/[\r\n]/', (string)$vars['key'])) {
-            throw new \RuntimeException('Chưa cấu hình API key hợp lệ.');
+            throw new RequestException('Chưa cấu hình API key hợp lệ.');
         }
         $replace = static function (string $value) use ($vars): string {
             return preg_replace_callback('/\{([a-z_]+)\}/', static fn($m) => (string)($vars[$m[1]] ?? ''), $value);
@@ -42,9 +42,9 @@ final class Client
                     $status === 429 => 'API nhà cung cấp đang giới hạn tần suất (HTTP 429).',
                     default => "API nhà cung cấp trả lỗi HTTP {$status} hoặc phản hồi không phải JSON hợp lệ.",
                 };
-                throw new \RuntimeException($reason);
+                throw new RequestException($reason);
             }
-            throw new \RuntimeException('Nhà cung cấp chưa xác nhận yêu cầu. Vui lòng thử lại sau.');
+            throw new RequestException('Nhà cung cấp chưa xác nhận yêu cầu (HTTP ' . (int)$response['http'] . ', success không hợp lệ). Vui lòng kiểm tra cấu hình hoặc liên hệ hỗ trợ.');
         }
         return $response['data'];
     }
@@ -52,14 +52,14 @@ final class Client
     public static function safeLink(string $provider, mixed $value): string
     {
         if (!is_string($value) || !filter_var($value, FILTER_VALIDATE_URL)) {
-            throw new \RuntimeException('Link nhà cung cấp không hợp lệ.');
+            throw new RequestException('API nhà cung cấp không trả link hợp lệ trong trường shortenedUrl / link đã cấu hình.');
         }
         $parts = parse_url($value);
         $host = strtolower($parts['host'] ?? '');
         $expected = strtolower((string)parse_url(Catalog::get($provider)['base'] ?? 'https://yeujob.com', PHP_URL_HOST));
         if (($parts['scheme'] ?? '') !== 'https' || isset($parts['user']) || isset($parts['pass'])
             || isset($parts['port']) || ($host !== $expected && $host !== preg_replace('/^www\./', '', $expected))) {
-            throw new \RuntimeException('Domain link nhà cung cấp không hợp lệ.');
+            throw new RequestException('Domain link nhà cung cấp không hợp lệ.');
         }
         return $value;
     }

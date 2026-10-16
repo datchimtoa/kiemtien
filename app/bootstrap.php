@@ -59,6 +59,51 @@ if (!function_exists('vnd')) {
     }
 }
 
+if (!function_exists('ip_in_list')) {
+    /** Khớp IP với danh sách IP đơn hoặc CIDR (IPv4/IPv6). */
+    function ip_in_list(string $ip, array $list): bool
+    {
+        $bin = @inet_pton($ip);
+        if ($bin === false) {
+            return false;
+        }
+        foreach ($list as $entry) {
+            $entry = trim((string)$entry);
+            if ($entry === '') {
+                continue;
+            }
+            if (!str_contains($entry, '/')) {
+                if ($entry === $ip) {
+                    return true;
+                }
+                continue;
+            }
+            [$net, $bits] = explode('/', $entry, 2);
+            $nb = @inet_pton($net);
+            if ($nb === false || strlen($nb) !== strlen($bin) || !ctype_digit($bits)) {
+                continue;
+            }
+            $bits = (int)$bits;
+            if ($bits > strlen($bin) * 8) {
+                continue;
+            }
+            $bytes = intdiv($bits, 8);
+            $rem = $bits % 8;
+            if ($bytes > 0 && substr($bin, 0, $bytes) !== substr($nb, 0, $bytes)) {
+                continue;
+            }
+            if ($rem === 0) {
+                return true;
+            }
+            $mask = (0xFF << (8 - $rem)) & 0xFF;
+            if ((ord($bin[$bytes]) & $mask) === (ord($nb[$bytes]) & $mask)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
 if (!function_exists('client_ip')) {
     function client_ip(): string
     {
@@ -69,8 +114,8 @@ if (!function_exists('client_ip')) {
         $proxyEnv = getenv('TRUSTED_PROXY_IPS');
         $trusted = $proxyEnv !== false
             ? array_values(array_filter(array_map('trim', explode(',', $proxyEnv))))
-            : config('trusted_proxy_ips', getenv('RENDER') === 'true' ? ['127.0.0.1', '::1'] : []);
-        if (is_array($trusted) && in_array($peer, $trusted, true)
+            : config('trusted_proxy_ips', getenv('RENDER') === 'true' ? ['127.0.0.1', '::1', '10.0.0.0/8'] : []);
+        if (is_array($trusted) && ip_in_list($peer, $trusted)
             && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
             // Walk from the trusted peer, not the attacker-controlled leftmost value.
             $chain = array_map('trim', explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']));
@@ -80,7 +125,7 @@ if (!function_exists('client_ip')) {
             }
             if ($valid) {
                 $address = $peer;
-                while ($chain !== [] && in_array($address, $trusted, true)) {
+                while ($chain !== [] && ip_in_list($address, $trusted)) {
                     $address = array_pop($chain);
                 }
                 return $address;

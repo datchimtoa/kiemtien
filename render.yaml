@@ -16,7 +16,7 @@ services:
       # Trust only the local ingress observed by PHP, never arbitrary remote peers.
       # Ingress must overwrite X-Forwarded-For or append the actual connecting IP.
       - key: TRUSTED_PROXY_IPS
-        value: 127.0.0.1,::1
+        value: 127.0.0.1,::1,10.0.0.0/8
       # Domain chính — PHẢI là www (apex htxg.pro bị 307 redirect → webhook/postback mất).
       - key: BASE_URL
         value: https://www.htxg.pro
@@ -44,4 +44,3 @@ services:
         sync: false
       - key: SETUP_KEY
         sync: false
-

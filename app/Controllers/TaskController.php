@@ -17,6 +17,7 @@ final class TaskController
     public static function index(): void
     {
         $user = require_user();
+        header('Cache-Control: private, no-store');
         $res = PubCryptoClient::links((int)$user['id']);
         View::show('tasks/index', [
             'user'   => $user,
@@ -73,7 +74,8 @@ final class TaskController
         }
 
         $taskId = (int)input('task_id', 0);
-        $res = PubCryptoClient::links((int)$user['id']);
+        // link_dotask is single-use: never hand out a cached token on another click.
+        $res = PubCryptoClient::links((int)$user['id'], true);
         if (!$res['ok']) {
             $json['error'] = (string)$res['error'];
             json_response($json, 502);
@@ -85,8 +87,14 @@ final class TaskController
                 break;
             }
         }
+        if ($task !== null && $task['cooldown_remaining'] > 0) {
+            $json['error'] = 'Nhiệm vụ đang nghỉ. Vui lòng chờ ' . $task['cooldown_remaining'] . ' giây rồi thử lại.';
+            json_response($json, 429);
+        }
         if ($task === null || !$task['available'] || $task['link_dotask'] === '') {
-            $json['error'] = 'Nhiệm vụ không khả dụng hoặc đã hết lượt trong chu kỳ. Vui lòng thử nhiệm vụ khác.';
+            $json['error'] = $task !== null && $task['pending_in_cycle'] > 0
+                ? 'Có lượt nhiệm vụ đang chờ nhà cung cấp xác nhận. Vui lòng chờ hoặc chọn nhiệm vụ khác.'
+                : 'Nhà cung cấp chưa mở lượt nhiệm vụ này. Danh sách sẽ tự cập nhật; bạn có thể chọn nhiệm vụ khác.';
             json_response($json, 400);
         }
 
@@ -95,6 +103,7 @@ final class TaskController
             'INSERT INTO task_clicks(user_id, task_id, task_name, ip, created_at) VALUES(?,?,?,?,?)',
             [(int)$user['id'], $task['id'], (string)$task['task_name'], client_ip(), now()]
         );
+        PubCryptoClient::forgetLinks((int)$user['id']);
         $json['ok'] = true;
         $json['redirect'] = (string)$task['link_dotask'];
         json_response($json);

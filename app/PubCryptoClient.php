@@ -42,36 +42,22 @@ final class PubCryptoClient
             'Authorization: Bearer ' . self::apiKey(),
             'Accept: application/json',
         ];
+        $opt = ['headers' => $headers, 'user_agent' => ''];
         if ($body !== null) {
-            $headers[] = 'Content-Type: application/json';
+            $opt['body'] = $body;
+            $opt['json'] = true;
         }
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 15,
-            CURLOPT_CONNECTTIMEOUT => 6,
-            CURLOPT_CUSTOMREQUEST  => $method,
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_POSTFIELDS     => $body === null ? null : json_encode($body),
-        ]);
-        $resp = curl_exec($ch);
-        $err = curl_error($ch);
-        $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        if ($err !== '') {
-            return ['ok' => false, 'http' => 0, 'error' => 'curl: ' . $err];
-        }
-        $data = json_decode((string)$resp, true);
-        if (!is_array($data)) {
-            return ['ok' => false, 'http' => $code, 'error' => 'invalid response', 'raw' => substr((string)$resp, 0, 500)];
-        }
-        return ['ok' => $code >= 200 && $code < 300, 'http' => $code, 'data' => $data];
+        $res = Http::json($method, $url, $opt);
+        // No upstream bodies, URLs or cURL messages in user-facing errors.
+        return ['ok' => $res['ok'], 'http' => $res['http'], 'data' => $res['data'],
+            'error' => $res['ok'] ? null : 'PubCrypto request failed'];
     }
 
     /**
      * Fetch PubCrypto Link tasks for a member (sub_id = our user id). Cached with TTL.
      * @return array [ok, error, http, tasks, meta]
      */
-    public static function links(int $userId): array
+    public static function links(int $userId, bool $fresh = false): array
     {
         if (!self::configured()) {
             return ['ok' => false, 'error' => 'Chưa cấu hình PubCrypto (site_key / api_key). Liên hệ quản trị viên.', 'http' => 0, 'tasks' => [], 'meta' => []];
@@ -79,14 +65,14 @@ final class PubCryptoClient
         $siteKey = self::siteKey();
         $subId = (string)$userId;
         $cacheKey = $siteKey . '|' . $subId; // quota/cooldown are per-member
-        $ttl = max(10, Settings::getInt('pubcrypto_task_cache_ttl', 45));
         $now = time();
 
-        $cached = Database::one('SELECT payload, fetched_at FROM task_cache WHERE site_key = ?', [$cacheKey]);
-        if ($cached !== null && ($now - strtotime((string)$cached['fetched_at'])) < $ttl) {
+        $cached = $fresh ? null : Database::one('SELECT payload, fetched_at FROM task_cache WHERE site_key = ?', [$cacheKey]);
+        if ($cached !== null) {
             $payload = json_decode((string)$cached['payload'], true);
-            if (is_array($payload)) {
-                return self::shape($payload, true);
+            $age = $now - strtotime((string)$cached['fetched_at']);
+            if (is_array($payload) && $age >= 0 && $age < self::cacheLifetime($payload)) {
+                return self::shape($payload, true, $age);
             }
         }
 
@@ -112,7 +98,25 @@ final class PubCryptoClient
         return self::shape($res['data'], false);
     }
 
-    private static function shape(array $data, bool $fromCache): array
+    public static function forgetLinks(int $userId): void
+    {
+        Database::run('DELETE FROM task_cache WHERE site_key = ?', [self::siteKey() . '|' . $userId]);
+    }
+
+    /** Never keep a snapshot beyond a link expiry or a known cooldown boundary. */
+    private static function cacheLifetime(array $data): int
+    {
+        $ttl = min(max(10, Settings::getInt('pubcrypto_task_cache_ttl', 45)), max(0, (int)($data['link_expires_in'] ?? 600)));
+        foreach (($data['tasks'] ?? []) as $task) {
+            $cooldown = (int)($task['cooldown_remaining'] ?? 0);
+            if ($cooldown > 0) {
+                $ttl = min($ttl, $cooldown);
+            }
+        }
+        return $ttl;
+    }
+
+    private static function shape(array $data, bool $fromCache, int $age = 0): array
     {
         $tasks = [];
         foreach (($data['tasks'] ?? []) as $t) {
@@ -126,9 +130,10 @@ final class PubCryptoClient
                 'total_max'            => (int)($t['total_max'] ?? 0),
                 'cooldown_seconds'     => (int)($t['cooldown_seconds'] ?? 0),
                 'done_today'           => (int)($t['done_today'] ?? 0),
+                'pending_in_cycle'     => (int)($t['pending_in_cycle'] ?? 0),
                 'remaining_in_cycle'   => (int)($t['remaining_in_cycle'] ?? 0),
                 'available'            => (bool)($t['available'] ?? false),
-                'cooldown_remaining'   => (int)($t['cooldown_remaining'] ?? 0),
+                'cooldown_remaining'   => max(0, (int)($t['cooldown_remaining'] ?? 0) - $age),
             ];
         }
         return [
@@ -140,6 +145,7 @@ final class PubCryptoClient
                 'link_expires_in' => (int)($data['link_expires_in'] ?? 600),
                 'member_percent'  => (int)($data['site']['Member Percent'] ?? 0),
                 'from_cache'      => $fromCache,
+                'refresh_after'   => max(1, self::cacheLifetime($data) - $age),
             ],
         ];
     }

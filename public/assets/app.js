@@ -49,9 +49,12 @@
   });
 
   // ---------- task starter (PubCrypto Link) — auto redirect back to /tasks ----------
+  var startingTask = false;
   document.querySelectorAll('.do-task').forEach(function (btn) {
     btn.addEventListener('click', function (ev) {
       ev.preventDefault();
+      if (startingTask) { return; }
+      startingTask = true;
       var orig = btn.textContent;
       btn.disabled = true; btn.textContent = 'Đang tạo link...';
       fetch(btn.dataset.url, {
@@ -74,14 +77,37 @@
             return;
           }
           alert((o.j && o.j.error) || 'Không tạo được nhiệm vụ. Thử lại sau.');
+          startingTask = false;
           btn.disabled = false; btn.textContent = orig;
         })
         .catch(function () {
           alert('Lỗi mạng. Thử lại sau.');
+          startingTask = false;
           btn.disabled = false; btn.textContent = orig;
         });
     });
   });
+
+  // Refresh authoritative quota state; a timer must never unlock a task or pay.
+  var taskRefresh = document.querySelector('[data-task-refresh]');
+  if (taskRefresh) {
+    var loadedAt = Date.now();
+    var refreshAfter = Math.max(5, Number(taskRefresh.dataset.taskRefresh) || 45);
+    var countdowns = document.querySelectorAll('[data-task-cooldown]');
+    var refreshTasks = function () {
+      var elapsed = Math.floor((Date.now() - loadedAt) / 1000);
+      countdowns.forEach(function (node) {
+        var left = Math.max(0, Number(node.dataset.taskCooldown) - elapsed);
+        node.textContent = left > 0 ? '⏳ Chờ ' + left + 's' : 'Đang cập nhật...';
+      });
+      if (!document.hidden && !startingTask && elapsed >= refreshAfter) {
+        location.reload();
+      }
+    };
+    setInterval(refreshTasks, 1000);
+    document.addEventListener('visibilitychange', refreshTasks);
+    window.addEventListener('focus', refreshTasks);
+  }
 
   // ---------- withdraw: hide bank select for wallets ----------
   var methodSel = document.querySelector('select[name=method]');

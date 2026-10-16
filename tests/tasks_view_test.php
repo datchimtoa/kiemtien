@@ -43,6 +43,17 @@ $data['res'] = ['ok' => true, 'tasks' => [[
 $html = View::render('tasks/index', $data, null);
 $check('both sources share one task grid', substr_count($html, 'class="task-grid"') === 1
     && str_contains($html, '/tasks/provider/start') && str_contains($html, 'data-url="/tasks/start"'));
+$check('task page schedules authoritative quota refresh', str_contains($html, 'data-task-refresh="45"'));
+$data['res']['tasks'][0]['available'] = false;
+$data['res']['tasks'][0]['cooldown_remaining'] = 12;
+$html = View::render('tasks/index', $data, null);
+$check('cooling task has a live countdown and no active start button', str_contains($html, 'data-task-cooldown="12"')
+    && str_contains($html, 'Đang nghỉ...') && !str_contains($html, 'data-url="/tasks/start"'));
+$data['res']['tasks'][0]['cooldown_remaining'] = 0;
+$data['res']['tasks'][0]['pending_in_cycle'] = 1;
+$html = View::render('tasks/index', $data, null);
+$check('pending quota is not mislabeled permanently exhausted', str_contains($html, 'Chờ xác nhận')
+    && !str_contains($html, 'Hết lượt chu kỳ') && !str_contains($html, 'data-url="/tasks/start"'));
 $data['taskClicks'] = [['task_name' => '<script>sample</script>', 'created_at' => now()]];
 $html = View::render('tasks/history', $data, null);
 $check('PubCrypto history escapes names and does not claim payment', str_contains($html, '&lt;script&gt;sample&lt;/script&gt;')

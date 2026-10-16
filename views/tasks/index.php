@@ -2,6 +2,9 @@
   <h2>🎯 Nhiệm vụ kiếm tiền</h2>
   <a href="/tasks/history">Lịch sử nhiệm vụ</a>
 </div>
+<?php if ($res['ok'] && !empty($res['tasks'])): ?>
+<p class="hint muted" data-task-refresh="<?= max(5, (int)($res['meta']['refresh_after'] ?? 45)) ?>">Trạng thái nhiệm vụ tự cập nhật. Khi hết thời gian chờ, hệ thống kiểm tra lại với nhà cung cấp.</p>
+<?php endif; ?>
   <p class="hint">Không cộng tiền chỉ vì quay lại. Phần thưởng chờ xác nhận API / postback có chữ ký hoặc admin kiểm tra. Không dùng nhiều tài khoản, chia sẻ link hay bỏ qua các bước.</p>
   <div class="task-grid">
   <?php $enabledProviders = 0; ?>
@@ -51,18 +54,18 @@
       </div>
       <div class="task-meta">
         <?php if ($state === 'cool'): ?>
-          <span class="pill warn">⏳ Chờ <?= $t['cooldown_remaining'] ?>s</span>
+          <span class="pill warn" data-task-cooldown="<?= (int)$t['cooldown_remaining'] ?>">⏳ Chờ <?= (int)$t['cooldown_remaining'] ?>s</span>
         <?php elseif ($state === 'ok'): ?>
           <span class="pill ok">✅ Khả dụng</span>
         <?php else: ?>
-          <span class="pill">🔒 Hết lượt</span>
+          <span class="pill"><?= ($t['pending_in_cycle'] ?? 0) > 0 ? '⏳ Chờ xác nhận' : '⏳ Chờ nhà cung cấp mở lượt' ?></span>
         <?php endif; ?>
-        <span class="muted">Còn <?= $remaining ?>/<?= (int)$t['total_max'] ?> lượt · làm lại sau <?= (int)$t['cooldown_seconds'] ?>s</span>
+        <span class="muted">Còn <?= $remaining ?>/<?= (int)$t['total_max'] ?> lượt · thời gian nghỉ theo chu kỳ: <?= (int)$t['cooldown_seconds'] ?>s</span>
       </div>
       <?php if ($state === 'ok'): ?>
         <button class="btn do-task" data-task="<?= (int)$t['id'] ?>" data-url="/tasks/start">🚀 Bắt đầu</button>
       <?php else: ?>
-        <button class="btn" disabled><?= $state === 'cool' ? 'Đang nghỉ...' : 'Hết lượt chu kỳ' ?></button>
+        <button class="btn" disabled><?= $state === 'cool' ? 'Đang nghỉ...' : 'Chờ cập nhật lượt' ?></button>
       <?php endif; ?>
     </div>
   <?php endforeach; ?>

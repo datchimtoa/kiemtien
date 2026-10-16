@@ -84,7 +84,9 @@ $rate_updater = [
 return [
     'base_url' => rtrim($base_url, '/'),
     // Exact immediate proxy IPs only. Proxy must overwrite incoming forwarded headers.
-    'trusted_proxy_ips' => array_values(array_filter(array_map('trim', explode(',', getenv('TRUSTED_PROXY_IPS') ?: '')))),
+    'trusted_proxy_ips' => array_values(array_filter(array_map('trim', explode(',',
+        getenv('TRUSTED_PROXY_IPS') !== false ? getenv('TRUSTED_PROXY_IPS') : (getenv('RENDER') === 'true' ? '127.0.0.1,::1' : '')
+    )))),
     'force_https' => true,
     'timezone' => 'Asia/Ho_Chi_Minh',
     'db' => $db_config,

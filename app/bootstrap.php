@@ -64,7 +64,12 @@ if (!function_exists('client_ip')) {
     {
         // Forwarded IPs are attacker-controlled unless the immediate peer is trusted.
         $peer = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-        $trusted = config('trusted_proxy_ips', []);
+        // Env must also work with older config.php files that lack this setting.
+        // Render's observed local ingress is the only automatic trust default.
+        $proxyEnv = getenv('TRUSTED_PROXY_IPS');
+        $trusted = $proxyEnv !== false
+            ? array_values(array_filter(array_map('trim', explode(',', $proxyEnv))))
+            : config('trusted_proxy_ips', getenv('RENDER') === 'true' ? ['127.0.0.1', '::1'] : []);
         if (is_array($trusted) && in_array($peer, $trusted, true)
             && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
             // Walk from the trusted peer, not the attacker-controlled leftmost value.

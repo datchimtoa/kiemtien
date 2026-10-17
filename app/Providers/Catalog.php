@@ -381,6 +381,34 @@ final class Catalog
                     'ip_daily_limit' => 1,
                 ],
             ],
+
+            // 11. Link4m (link4m.co) — first-party callback and risk scoring.
+            'link4m' => [
+                'label'  => 'Link4m (link4m.co)',
+                'kind'   => 'shortlink',
+                'verify' => 'manual',
+                'base'   => 'https://link4m.co',
+                'auth'   => 'api',
+                'docs'   => 'GET /api-shorten/v2?api={key}&url={url}. Lượt quay lại đi qua callback riêng để xác minh first-party; không tự cộng tiền.',
+                'services' => [
+                    ['id' => 'default', 'label' => 'Rút gọn link tiêu chuẩn'],
+                ],
+                'target_label' => 'URL callback xác minh được tạo tự động',
+                'shorten' => [
+                    'method' => 'GET',
+                    'url'    => 'https://link4m.co/api-shorten/v2',
+                    'query'  => ['api' => '{key}', 'url' => '{url}'],
+                    'ok'     => ['path' => 'status', 'values' => ['success', true, 1]],
+                    'result' => ['shortenedUrl'],
+                    'error'  => ['message'],
+                ],
+                'defaults' => [
+                    'reward_vnd'     => 400,
+                    'daily_limit'    => 20,
+                    'min_seconds'    => 20,
+                    'ip_daily_limit' => 2,
+                ],
+            ],
         ];
     }
 

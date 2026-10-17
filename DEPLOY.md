@@ -60,6 +60,7 @@
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` | bot OTP |
 | `PUBCRYPTO_SITE_KEY` / `PUBCRYPTO_API_KEY` / `PUBCRYPTO_FORWARD_SECRET` / `PUBCRYPTO_API_BASE` | PubCrypto |
 | `POSTBACK_TOKEN` | đoạn bí mật trong URL postback |
+| `LINK4M_HMAC_SECRET` / `LINK4M_TURNSTILE_SITE_KEY` / `LINK4M_TURNSTILE_SECRET` | Link4m first-party callback verification |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | tài khoản admin |
 | `BASE_URL` | domain chính (vd `https://htxg.pro`) — ưu tiên cao nhất |
 | `RENDER_EXTERNAL_URL` | Render tự set → fallback cho `base_url` |

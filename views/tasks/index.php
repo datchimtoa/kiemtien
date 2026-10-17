@@ -27,7 +27,7 @@
       <div class="task-meta">
         <span class="pill <?= $ready ? 'ok' : 'warn' ?>"><?= $ready ? '✅ Khả dụng' : ($wait > 0 ? '⏳ Chờ ' . $wait . 's' : '🔒 Hết lượt 24h') ?></span>
         <span class="muted">Còn tối đa <?= max(0, $limit - $count) ?>/<?= $limit ?> lượt / 24h · tối thiểu <?= \App\Providers\Tasks::setting($providerId, 'min_seconds') ?>s</span>
-        <span class="muted"><?= $providerId === 'yeujob' ? 'YeuJob V2: chờ xác minh kết quả' : ($providerId === 'xtask' ? 'XTask: chờ xác minh kết quả' : ($apiProof ? 'Xác minh qua API đối tác' : 'Chờ xác nhận hoặc callback có xác thực')) ?> · còn áp dụng giới hạn IP</span>
+        <span class="muted"><?= $providerId === 'yeujob' ? 'YeuJob V2: chờ xác minh kết quả' : ($providerId === 'xtask' ? 'XTask: chờ xác minh kết quả' : ($providerId === 'link4m' ? 'Link4m: xác minh first-party' : ($apiProof ? 'Xác minh qua API đối tác' : 'Chờ xác nhận hoặc callback có xác thực'))) ?> · còn áp dụng giới hạn IP</span>
       </div>
       <form method="post" action="/tasks/provider/start" target="_blank" rel="noopener noreferrer" class="provider-start">
         <?= \App\Csrf::field() ?>

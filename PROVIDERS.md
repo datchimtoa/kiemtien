@@ -21,6 +21,9 @@ Behind a reverse proxy, set `TRUSTED_PROXY_IPS` to the **exact immediate peer ad
 | Traffic24h | Authenticated detail API; unique slug and exact destination; requires `views_valid >= 1` and an eligible browser return |
 | XTASK | Link creation implemented; manual review. `add.md` gives the status endpoint but no response schema or paid-state semantics |
 | TrafficTop, bbmkts, SiteTop, TrafficVN, TrafficUserr, Link999, Site2S | Link creation implemented; manual review or explicitly supported signed callback |
+| Link4m | Per-attempt callback with HMAC, cookie, Turnstile, timing, referer, IP/subnet, UA, interaction and country scoring; verified/hold remains pending for audited review |
+
+Link4m uses `GET https://link4m.co/api-shorten/v2?api=<configured-key>&url=<unique-callback-url>`. The callback records first-party arrival state and applies the documented risk score. Link4m has no documented CSV or postback in the development specification, so browser verification never credits automatically; dashboard reconciliation is not implemented until real dashboard HTML/login details are supplied.
 
 Site2S's public raw view counter is not payment/anti-bot approval proof. Browser redirects, elapsed timers, query parameters and screenshots alone cannot authorize credit. Minimum elapsed time is only an additional sanity check, never completion proof. API failures fail closed. Link/provider identity and ledger IDs are unique. Definite failures before submitting a creation/accept request are recorded as `creation_failed` and release daily user/IP quotas. All attempts retain hourly/cooldown anti-spam limits. Failures after submission remain `failed` and consume daily quota because remote acceptance may be ambiguous; legacy failed records are not automatically released. Attempts expire after seven days; unresolved jobs require administrative reconciliation, not blind replay.
 

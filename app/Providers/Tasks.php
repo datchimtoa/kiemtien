@@ -42,6 +42,9 @@ final class Tasks
             throw new \RuntimeException('Cần cấu hình base_url HTTPS cố định.');
         }
         $destination = $base . '/task/return/' . $token;
+        if ($provider === 'link4m') {
+            $destination = Link4mAntiCheat::callbackUrl($token);
+        }
         $reward = Settings::getInt('provider_' . $provider . '_service_' . $service . '_reward_vnd', self::setting($provider, 'reward_vnd'));
         if ($reward < 0 || $reward > Settings::getInt('postback_max_reward_vnd', 2000000)) {
             throw new \RuntimeException('Thù lao không hợp lệ.');
@@ -146,6 +149,10 @@ final class Tasks
                 throw new \RuntimeException('Mã nhiệm vụ hoặc phần thưởng không hợp lệ.');
             }
             Database::run("UPDATE provider_attempts SET status = 'pending', remote_id = ?, short_url = ?, reward_vnd = ? WHERE token = ? AND status = 'creating'", [$remote, $link, $reward, $token]);
+            if ($provider === 'link4m') {
+                Link4mAntiCheat::initialize($token, $userId, $ip, user_agent(), self::deviceHash());
+                Link4mAntiCheat::setCookie($token);
+            }
             return ['token' => $token, 'redirect' => $link];
         } catch (\Throwable $e) {
             try {
@@ -235,7 +242,7 @@ final class Tasks
             $lock = Database::isSqlite() ? '' : ' FOR UPDATE';
             $row = Database::one('SELECT * FROM provider_attempts WHERE token = ?' . $lock, [$token]);
             if ($row === null || $row['status'] !== 'pending' || $row['expires_at'] < now()
-                || ($row['provider'] === 'yeujob' && str_starts_with($row['remote_id'], 'v2:') && $proof !== 'admin_review')
+                || ($proof !== 'admin_review' && (($row['provider'] === 'yeujob' && str_starts_with($row['remote_id'], 'v2:')) || $row['provider'] === 'link4m'))
                 || ($provider !== null && $row['provider'] !== $provider)
                 || time() - strtotime($row['created_at']) < (int)$row['min_seconds']) {
                 if ($ownsTransaction) {

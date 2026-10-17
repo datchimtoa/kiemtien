@@ -38,7 +38,7 @@ Database::run('INSERT INTO users(phone,password_hash,created_at,updated_at) VALU
 $uid = Database::lastId();
 Database::run('INSERT INTO users(phone,password_hash,created_at,updated_at) VALUES(?,?,?,?)', ['84922222222', 'test', now(), now()]);
 $other = Database::lastId();
-check('ten provider definitions', count(Catalog::definitions()) === 10);
+check('eleven provider definitions', count(Catalog::definitions()) === 11);
 check('spoofed forwarded IP ignored', client_ip() === '203.0.113.20');
 $GLOBALS['__config']['trusted_proxy_ips'] = ['127.0.0.1', '::1'];
 $_SERVER['REMOTE_ADDR'] = '127.0.0.1';

@@ -55,6 +55,41 @@ final class ProviderController
         redirect('/tasks/history');
     }
 
+    public static function link4mCallback(): void
+    {
+        $token = (string)input('t', '');
+        $signature = (string)input('sig', '');
+        $row = $token !== '' ? \App\Providers\Link4mAntiCheat::find($token) : null;
+        $result = null;
+        $error = null;
+        if ($row === null || !\App\Providers\Link4mAntiCheat::validSignature($token, $signature)) {
+            $error = 'Liên kết xác minh không hợp lệ hoặc đã hết hạn.';
+        } elseif (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+            $row = \App\Providers\Link4mAntiCheat::markArrival($token);
+        } else {
+            try {
+                \App\Csrf::check();
+                $result = \App\Providers\Link4mAntiCheat::complete(
+                    $token,
+                    $signature,
+                    (string)input('cf-turnstile-response', ''),
+                    (int)input('ev', 0)
+                );
+            } catch (\Throwable $e) {
+                $error = $e instanceof \InvalidArgumentException ? $e->getMessage() : 'Không hoàn tất được xác minh. Vui lòng thử lại sau.';
+            }
+        }
+        \App\View::show('tasks/link4m_callback', [
+            'row' => $row,
+            'token' => $token,
+            'signature' => $signature,
+            'siteKey' => \App\Providers\Link4mAntiCheat::siteKey(),
+            'result' => $result,
+            'error' => $error,
+        ], 'base');
+    }
+
+
     public static function verify(): void
     {
         $user = require_user();

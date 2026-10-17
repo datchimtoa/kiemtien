@@ -44,7 +44,7 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
-header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'self'; base-uri 'self'");
+header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; frame-ancestors 'self'; base-uri 'self'");
 
 try {
     Database::migrate();
@@ -67,6 +67,10 @@ if (preg_match('#^/postback/provider/([a-z0-9]+)$#', $path, $m)) {
 if (preg_match('#^/task/return/([a-f0-9]{64})$#', $path, $m) && $method === 'GET') {
     \App\Controllers\ProviderController::returned($m[1]);
 }
+if ($path === '/task/link4m/callback' && in_array($method, ['GET', 'POST'], true)) {
+    \App\Controllers\ProviderController::link4mCallback();
+}
+
 
 // ---------------------------------------------------------------- postback (no session, no CSRF)
 if ($path === '/postback/pubcrypto' || str_starts_with($path, '/postback/pubcrypto/')) {

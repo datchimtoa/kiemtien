@@ -44,3 +44,9 @@ services:
         sync: false
       - key: SETUP_KEY
         sync: false
+      - key: LINK4M_HMAC_SECRET
+        sync: false
+      - key: LINK4M_TURNSTILE_SITE_KEY
+        sync: false
+      - key: LINK4M_TURNSTILE_SECRET
+        sync: false

@@ -15,7 +15,7 @@ final class Schema
      * Tăng số này MỖI KHI thêm/bớt DDL, cột, index hoặc setting mặc định mới,
      * nếu không thay đổi sẽ không được áp dụng cho DB đã tồn tại.
      */
-    private const VERSION = '2026-10-17.1';
+    private const VERSION = '2026-10-17.2';
 
     /** Cờ đánh dấu rate_buckets đã đúng cấu trúc (tránh kiểm tra mỗi request). */
     private const FLAG_RATE_BUCKETS = 'rate_buckets_ok';
@@ -31,6 +31,29 @@ final class Schema
         )");
     }
 
+    private static function ensureLink4mTable(PDO $pdo): void
+    {
+        $text = Database::isSqlite() ? 'TEXT' : 'VARCHAR(255)';
+        $pdo->exec("CREATE TABLE IF NOT EXISTS link4m_sessions (
+            token {$text} PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            ip {$text} NOT NULL,
+            ua {$text},
+            fp {$text},
+            provider {$text} NOT NULL DEFAULT 'link4m',
+            status {$text} NOT NULL DEFAULT 'pending',
+            risk_score INTEGER,
+            reasons {$text},
+            link4m_countable INTEGER,
+            created_at {$text} NOT NULL,
+            arrived_at {$text},
+            arrive_ref {$text},
+            arrive_ip {$text},
+            arrive_ua {$text},
+            completed_at {$text}
+        )");
+    }
+
     public static function migrate(PDO $pdo): void
     {
         // Fast-path: schema đã đúng version → bỏ qua ~25 câu DDL mỗi request
@@ -42,6 +65,11 @@ final class Schema
                     Database::value('SELECT 1 FROM app_sessions LIMIT 1');
                 } catch (\Throwable $e) {
                     self::ensureSessionTable($pdo);
+                }
+                try {
+                    Database::value('SELECT 1 FROM link4m_sessions LIMIT 1');
+                } catch (\Throwable $e) {
+                    self::ensureLink4mTable($pdo);
                 }
                 if (Database::value('SELECT svalue FROM settings WHERE skey = ?', [self::FLAG_RATE_BUCKETS]) !== '1') {
                     self::ensureRateBuckets($pdo);
@@ -91,6 +119,7 @@ final class Schema
             updated_at {$text(32)}
         )");
         self::ensureSessionTable($pdo);
+        self::ensureLink4mTable($pdo);
 
         $pdo->exec("CREATE TABLE IF NOT EXISTS users (
             id {$pk},

@@ -100,6 +100,14 @@ return [
         'secure' => true,
     ],
     'postback_token' => $postback_token,
+    'link4m' => [
+        'hmac_secret' => getenv('LINK4M_HMAC_SECRET') ?: '',
+        'turnstile_site_key' => getenv('LINK4M_TURNSTILE_SITE_KEY') ?: '',
+        'turnstile_secret' => getenv('LINK4M_TURNSTILE_SECRET') ?: '',
+        'min_seconds' => (int)(getenv('LINK4M_MIN_SECONDS') ?: 20),
+        'soft_seconds' => (int)(getenv('LINK4M_SOFT_SECONDS') ?: 30),
+        'token_ttl' => (int)(getenv('LINK4M_TOKEN_TTL') ?: 3600),
+    ],
     'sms' => $sms_config,
     'rate_updater' => $rate_updater,
     // Crypto API configs (set via environment)

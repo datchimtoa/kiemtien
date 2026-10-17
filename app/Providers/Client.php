@@ -63,8 +63,12 @@ final class Client
         $parts = parse_url($value);
         $host = strtolower($parts['host'] ?? '');
         $expected = strtolower((string)parse_url(Catalog::get($provider)['base'] ?? 'https://yeujob.com', PHP_URL_HOST));
+        $allowedHosts = [$expected, preg_replace('/^www\\./', '', $expected)];
+        if ($provider === 'link4m') {
+            $allowedHosts = ['link4m.co', 'www.link4m.co', 'link4m.com', 'www.link4m.com'];
+        }
         if (($parts['scheme'] ?? '') !== 'https' || isset($parts['user']) || isset($parts['pass'])
-            || isset($parts['port']) || ($host !== $expected && $host !== preg_replace('/^www\./', '', $expected))) {
+            || isset($parts['port']) || !in_array($host, $allowedHosts, true)) {
             throw new RequestException('Domain link nhà cung cấp không hợp lệ.');
         }
         return $value;

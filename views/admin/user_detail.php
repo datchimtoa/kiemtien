@@ -8,7 +8,7 @@
     <div>
       <div class="card">
         <h3>Thông tin tài khoản</h3>
-        <table class="kv">
+        <div class="table-wrap"><table class="kv">
           <tr><th>Trạng thái</th><td><span class="pill <?= $user['status'] === 'active' ? 'ok' : ($user['status'] === 'banned' ? 'danger' : 'warn') ?>"><?= e($user['status']) ?></span><?= (int)$user['risk_flag'] ? ' ⚠' : '' ?></td></tr>
           <tr><th>SĐT</th><td><?= e(display_phone($user['phone'])) ?></td></tr>
           <tr><th>Tên</th><td><?= e($user['full_name'] ?: '—') ?></td></tr>
@@ -18,28 +18,28 @@
           <tr><th>IP đăng ký</th><td><code><?= e($user['register_ip']) ?></code> <span class="pill"><?= e($stats['ip_version']) ?></span></td></tr>
           <tr><th>IP đăng nhập gần nhất</th><td><?= e($user['last_login_ip'] ?: '—') ?> <span class="pill"><?= $user['last_login_ip'] ? e(ip_version((string)$user['last_login_ip'])) : '' ?></span></td></tr>
           <tr><th>Lần hoạt động cuối</th><td><?= e($user['last_login_at'] ?: 'Chưa bao giờ') ?></td></tr>
-        </table>
+        </table></div>
       </div>
 
       <div class="card">
         <h3>Điểm số</h3>
-        <table class="kv">
+        <div class="table-wrap"><table class="kv">
           <tr><th>Uy tín</th><td><div class="score-bar"><div class="score-fill" style="width:<?= (int)$stats['trust_score'] ?>%"></div><span class="score-val"><?= (int)$stats['trust_score'] ?></span></div></td></tr>
           <tr><th>High Score</th><td><b class="hl"><?= vnd((int)$stats['high_score']) ?></b></td></tr>
           <tr><th>Nhiệm vụ</th><td><?= (int)$stats['tasks_done'] ?></td></tr>
           <tr><th>Tổng thu</th><td><?= vnd((int)$stats['total_earned']) ?></td></tr>
           <tr><th>Chargeback</th><td><?= (int)$stats['chargebacks'] ? '<span class="pill danger">' . (int)$stats['chargebacks'] . '</span>' : '<span class="pill ok">0</span>' ?></td></tr>
-        </table>
+        </table></div>
       </div>
 
       <div class="card">
         <h3>Telegram</h3>
         <?php if (!empty($user['telegram_user_id'])): ?>
-          <table class="kv">
+          <div class="table-wrap"><table class="kv">
             <tr><th>User ID</th><td><?= e($user['telegram_user_id']) ?></td></tr>
             <tr><th>Username</th><td><?= e($user['telegram_username'] ?: '—') ?></td></tr>
             <tr><th>Verified</th><td><?= e($user['telegram_verified_at'] ?: '—') ?></td></tr>
-          </table>
+          </table></div>
         <?php else: ?>
           <p class="muted">Chưa xác minh Telegram.</p>
         <?php endif; ?>
@@ -52,7 +52,7 @@
         <?php if (!$stats['devices']): ?>
           <p class="muted">Không có thiết bị nào.</p>
         <?php else: ?>
-        <table>
+        <div class="table-wrap"><table>
           <thead><tr><th>Device ID</th><th>Platform</th><th>IP</th><th>Trusted</th><th>Lần cuối</th></tr></thead>
           <tbody>
           <?php foreach ($stats['devices'] as $d): ?>
@@ -65,7 +65,7 @@
             </tr>
           <?php endforeach; ?>
           </tbody>
-        </table>
+        </table></div>
         <?php endif; ?>
       </div>
 
@@ -74,7 +74,7 @@
         <?php if (!$stats['ips']): ?>
           <p class="muted">Không có.</p>
         <?php else: ?>
-        <table>
+        <div class="table-wrap"><table>
           <thead><tr><th>IP</th><th>Loại</th><th>Lượt</th><th>Cập nhật</th></tr></thead>
           <tbody>
           <?php foreach ($stats['ips'] as $i): ?>
@@ -86,7 +86,7 @@
             </tr>
           <?php endforeach; ?>
           </tbody>
-        </table>
+        </table></div>
         <?php endif; ?>
       </div>
 
@@ -95,7 +95,7 @@
         <?php if (!$stats['risk_events']): ?>
           <p class="muted">Không có.</p>
         <?php else: ?>
-        <table>
+        <div class="table-wrap"><table>
           <thead><tr><th>Loại</th><th>Mức</th><th>Chi tiết</th><th>IP</th><th>Thời gian</th></tr></thead>
           <tbody>
           <?php foreach ($stats['risk_events'] as $r): ?>
@@ -108,13 +108,13 @@
             </tr>
           <?php endforeach; ?>
           </tbody>
-        </table>
+        </table></div>
         <?php endif; ?>
       </div>
 
       <div class="card">
         <h3>Giao dịch</h3>
-        <table>
+        <div class="table-wrap"><table>
           <thead><tr><th>Loại</th><th>Số lượng</th><th>Tổng</th></tr></thead>
           <tbody>
           <?php foreach ($stats['tx_summary'] as $tx): ?>
@@ -125,7 +125,7 @@
             </tr>
           <?php endforeach; ?>
           </tbody>
-        </table>
+        </table></div>
         <p class="hint">Rút: 
           <?php foreach ($stats['wd_summary'] as $wd): ?>
             <span class="pill <?= e($wd['status']) ?>"><?= e($wd['status']) ?>: <?= vnd(abs((int)$wd['sum'])) ?> (<?= (int)$wd['cnt'] ?>)</span>

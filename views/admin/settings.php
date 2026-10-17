@@ -1,11 +1,12 @@
+<div class="page-head"><div><span class="eyebrow">WORKSPACE / CONFIGURATION</span><h2>Cài đặt hệ thống</h2><p>Cấu hình hiện tại cho tài khoản, nhiệm vụ và thanh toán.</p></div></div>
 <div class="card">
-  <h3>📈 Tỉ giá &amp; Thời gian uptime</h3>
-  <table class="kv">
+  <h3>Tỉ giá &amp; Thời gian uptime</h3>
+  <div class="table-wrap"><table class="kv">
     <tr><th>Tỉ giá USD→VND hiện tại</th><td><b class="hl"><?= number_format($rateInfo['rate'], 0, ',', '.') ?>₫</b></td></tr>
     <tr><th>Cập nhật lúc</th><td><?= e($rateInfo['updated_at'] ?: 'Chưa có') ?></td></tr>
     <tr><th>Chế độ</th><td><span class="pill ok">Cố định 24.000 VND/USDT</span></td></tr>
     <tr><th>% chia cho member</th><td><?= (int)$rateInfo['member_share'] ?>%</td></tr>
-  </table>
+  </table></div>
   <p class="hint">Tỷ giá quy đổi cố định, không gọi API thị trường. PubCrypto reward_pb đã là VND cuối cho thành viên và không được quy đổi hay chia phần trăm lần nữa.</p>
   <p class="hint">Ví dụ: 1 USD = <?= number_format($rateInfo['rate'], 0, ',', '.') ?>₫ → nếu member được <?= (int)$rateInfo['member_share'] ?>%, với nhiệm vụ trị giá $0.08 → member nhận <?= vnd((int)floor(0.08 * $rateInfo['rate'] * $rateInfo['member_share'] / 100)) ?>.</p>
 </div>
@@ -14,7 +15,7 @@
   <h3>PubCrypto Postback URL (paste vào PubCrypto Dashboard)</h3>
   <p><code class="copybox"><?= e($postbackUrl) ?></code></p>
 </div>
-<form method="post" action="/admin/settings" class="stack">
+<form method="post" action="/admin/settings" class="stack settings-form">
   <?= App\Csrf::field() ?>
   <div class="grid2">
   <div class="card">

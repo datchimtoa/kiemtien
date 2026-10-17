@@ -7,10 +7,11 @@
 <title><?= e($title ?? 'HTXG.PRO — High-Traffic X-Gain') ?></title>
 <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body>
+<body class="public-site">
+<a class="skip-link" href="#main">Đến nội dung</a>
 <header class="topbar">
-  <a class="brand" href="/">🚀 HTXG<span>.PRO</span></a>
-  <nav>
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">HX</span> HTXG<span>.PRO</span></a>
+  <nav aria-label="Điều hướng website">
     <?php if (App\Session::userId() !== null): ?>
       <a href="/dashboard">Tổng quan</a>
       <a href="/tasks">Nhiệm vụ</a>
@@ -23,14 +24,14 @@
     <?php endif; ?>
   </nav>
 </header>
-<main class="container">
+<main id="main" class="container">
 <?php foreach (App\Session::takeFlashes() as $f): ?>
-  <div class="flash <?= e($f['type']) ?>"><?= e($f['message']) ?></div>
+  <div class="flash <?= e($f['type']) ?>" role="status"><?= e($f['message']) ?></div>
 <?php endforeach; ?>
 <?= $content ?>
 </main>
 <footer class="footer">
-  <p>© <?= date('Y') ?> <?= e($siteName ?? 'HTXG.PRO') ?> — High-Traffic X-Gain · Kiếm tiền online từ nhiệm vụ.</p>
+  <p>© <?= date('Y') ?> <?= e($siteName ?? 'HTXG.PRO') ?> · High-Traffic X-Gain · Nhiệm vụ rõ ràng. Thu nhập minh bạch.</p>
 </footer>
 <script src="/assets/app.js" defer></script>
 </body>

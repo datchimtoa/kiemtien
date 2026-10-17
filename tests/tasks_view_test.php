@@ -34,7 +34,7 @@ $check('no paid no-ad service', !str_contains($html, 'name="service" value="no_a
 $check('new providers visible when old provider fails', str_contains($html, '/tasks/provider/start'));
 $check('YeuJob V2 card explains pending verification', str_contains($html, 'YeuJob V2: chờ xác minh kết quả'));
 $check('task list links to separate history', str_contains($html, 'href="/tasks/history"'));
-$check('task list has no separate source sections or history table', !str_contains($html, 'Nhiệm vụ từ đối tác') && !str_contains($html, 'Nhiệm vụ PubCrypto') && !str_contains($html, '<table>'));
+$check('task list separates Task1 and Task2 without moving history into the list', str_contains($html, 'id="task1"') && str_contains($html, 'id="task2"') && !str_contains($html, '<table>'));
 $data['res'] = ['ok' => true, 'tasks' => [[
     'id' => 123, 'task_name' => 'PubCrypto sample', 'member_reward' => 400,
     'cooldown_remaining' => 0, 'available' => true, 'remaining_in_cycle' => 1,
@@ -44,6 +44,8 @@ $html = View::render('tasks/index', $data, null);
 $check('both sources share one task grid', substr_count($html, 'class="task-grid"') === 1
     && str_contains($html, '/tasks/provider/start') && str_contains($html, 'data-url="/tasks/start"'));
 $check('task page schedules authoritative quota refresh', str_contains($html, 'data-task-refresh="45"'));
+$check('Task1 precedes Task2 and preserves separate start endpoints', strpos($html, 'id="task1"') < strpos($html, 'id="task2"')
+    && str_contains($html, 'data-url="/tasks/start"') && str_contains($html, 'action="/tasks/provider/start"'));
 $data['res']['tasks'][0]['available'] = false;
 $data['res']['tasks'][0]['cooldown_remaining'] = 12;
 $html = View::render('tasks/index', $data, null);

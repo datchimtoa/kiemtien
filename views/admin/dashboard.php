@@ -1,3 +1,4 @@
+<div class="page-head"><div><span class="eyebrow">OPERATIONS / OVERVIEW</span><h2>Tổng quan vận hành</h2><p>Số liệu thực từ người dùng, sổ ví và yêu cầu thanh toán.</p></div></div>
 <div class="grid4">
 <?php foreach ([
   'users' => 'Tổng người dùng', 'usersToday' => 'ĐK hôm nay',
@@ -9,21 +10,21 @@
 <?php endforeach; ?>
 </div>
 <div class="card">
-  <h3>Yêu cầu rút đang chờ</h3>
-  <?php if (!$pendingWd): ?><p class="muted">Không có.</p>
+  <div class="section-head"><h3>Yêu cầu rút đang chờ</h3><a href="/admin/withdrawals">Xử lý thanh toán →</a></div>
+  <?php if (!$pendingWd): ?><div class="empty-state">Không có yêu cầu rút đang chờ xử lý.</div>
   <?php else: ?>
-  <table><thead><tr><th>#</th><th>SĐT</th><th>Số tiền</th><th>Thời gian</th></tr></thead><tbody>
+  <div class="table-wrap"><table><thead><tr><th>#</th><th>SĐT</th><th>Số tiền</th><th>Thời gian</th></tr></thead><tbody>
   <?php foreach ($pendingWd as $w): ?>
     <tr><td><?= (int)$w['id'] ?></td><td><?= e($w['phone']) ?></td><td><?= vnd((int)$w['amount_vnd']) ?></td><td><?= e($w['created_at']) ?></td></tr>
   <?php endforeach; ?>
-  </tbody></table>
+  </tbody></table></div>
   <?php endif; ?>
 </div>
 <div class="card">
-  <h3>Postback gần đây</h3>
-  <table><thead><tr><th>transId</th><th>subId</th><th>status</th><th>Kết quả</th><th>Thời gian</th></tr></thead><tbody>
+  <div class="section-head"><h3>Postback gần đây</h3><a href="/admin/postbacks">Xem nhật ký →</a></div>
+  <div class="table-wrap"><table><thead><tr><th>transId</th><th>subId</th><th>status</th><th>Kết quả</th><th>Thời gian</th></tr></thead><tbody>
   <?php foreach ($recentPostbacks as $p): ?>
     <tr><td><?= e($p['trans_id']) ?></td><td><?= e($p['sub_id']) ?></td><td><?= (int)$p['status_raw'] ?></td><td><?= e($p['result']) ?></td><td><?= e($p['created_at']) ?></td></tr>
   <?php endforeach; ?>
-  </tbody></table>
+  </tbody></table></div>
 </div>

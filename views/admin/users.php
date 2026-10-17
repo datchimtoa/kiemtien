@@ -1,12 +1,14 @@
+<div class="page-head"><div><span class="eyebrow">ACCOUNTS / MEMBERS</span><h2>Người dùng</h2><p>Tra cứu tài khoản, lịch sử hoạt động và kiểm soát rủi ro.</p></div></div>
 <div class="card">
 <form method="get" action="/admin/users" class="inline-form">
-  <input type="text" name="q" value="<?= e($q) ?>" placeholder="Tìm SĐT / tên / ID">
+  <input type="search" name="q" value="<?= e($q) ?>" placeholder="Tìm SĐT / tên / ID" aria-label="Tìm người dùng theo số điện thoại, tên hoặc ID">
   <button class="btn ghost" type="submit">Tìm</button>
 </form>
 <p class="muted">Tổng: <?= $total ?> người dùng · Trang <?= $page ?>/<?= max(1, (int)ceil($total / $perPage)) ?></p>
-<table>
+<div class="table-wrap"><table class="wide-table">
 <thead><tr><th>ID</th><th>SĐT</th><th>Tên</th><th>Số dư</th><th>Điểm</th><th>Uy tín</th><th>High score</th><th>Nhiệm vụ</th><th>Đã làm</th><th>Đã rút</th><th>Trạng thái</th><th>Thời gian</th><th>Hành động</th></tr></thead>
 <tbody>
+<?php if (!$rows): ?><tr><td colspan="13"><div class="empty-state">Không tìm thấy người dùng phù hợp.</div></td></tr><?php endif; ?>
 <?php foreach ($rows as $u): ?>
 <tr>
   <td><a href="/admin/users/<?= (int)$u['id'] ?>"><?=(int)$u['id']?></a></td>
@@ -30,7 +32,7 @@
     <form method="post" action="/admin/users/<?= (int)$u['id'] ?>/<?= $u['status'] === 'active' ? 'block' : 'unblock' ?>" class="inline"><?= App\Csrf::field() ?><button class="btn-link"><?= $u['status'] === 'active' ? 'Khoá' : 'Mở' ?></button></form>
     <?php if ((int)$u['risk_flag']): ?><form method="post" action="/admin/users/<?= (int)$u['id'] ?>/clear_risk" class="inline"><?= App\Csrf::field() ?><button class="btn-link">Bỏ cờ</button></form><?php endif; ?>
     <form method="post" action="/admin/users/<?= (int)$u['id'] ?>/adjust" class="inline"><?= App\Csrf::field() ?>
-      <input type="number" name="amount" placeholder="±VND" style="width:90px" required>
+      <input type="number" name="amount" placeholder="±VND" aria-label="Số tiền điều chỉnh VND" style="width:90px" required>
       <button class="btn-link">Điều chỉnh</button>
     </form>
     <form method="post" action="/admin/users/<?= (int)$u['id'] ?>/delete" class="inline"><?= App\Csrf::field() ?><button class="btn-link danger">Xóa</button></form>
@@ -38,7 +40,7 @@
 </tr>
 <?php endforeach; ?>
 </tbody>
-</table>
+</table></div>
 <div class="pager">
   <?php if ($page > 1): ?><a class="btn ghost" href="?q=<?= urlencode($q) ?>&page=<?= $page - 1 ?>">← Trước</a><?php endif; ?>
   <?php if ($page * $perPage < $total): ?><a class="btn ghost" href="?q=<?= urlencode($q) ?>&page=<?= $page + 1 ?>">Sau →</a><?php endif; ?>

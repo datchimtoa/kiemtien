@@ -1,5 +1,7 @@
 <div class="card auth">
-<h2>Đăng nhập</h2>
+<span class="eyebrow auth-eyebrow">HTXG / MEMBER ACCESS</span>
+<h2>Chào mừng trở lại.</h2>
+<p class="muted">Đăng nhập để tiếp tục nhiệm vụ và theo dõi số dư.</p>
 <?php if ($error): ?><div class="flash error"><?= e($error) ?></div><?php endif; ?>
 <?php if (!$otpStep): ?>
   <form method="post" action="/login" class="stack" data-started>

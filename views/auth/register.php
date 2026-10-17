@@ -1,5 +1,7 @@
 <div class="card auth">
-<h2>Đăng ký tài khoản</h2>
+<span class="eyebrow auth-eyebrow">HTXG / CREATE ACCOUNT</span>
+<h2>Không gian làm việc của bạn.</h2>
+<p class="muted">Tạo tài khoản để bắt đầu. Xác thực Telegram miễn phí.</p>
 <?php if ($step === 'phone'): ?>
   <?php if ($error): ?><div class="flash error"><?= e($error) ?></div><?php endif; ?>
   <form method="post" action="/register/phone" class="stack" data-started>
@@ -21,7 +23,7 @@
   <p class="muted">Đã có tài khoản? <a href="/login">Đăng nhập</a></p>
 <?php else: ?>
   <?php if ($error): ?><div class="flash error"><?= e($error) ?></div><?php endif; ?>
-  <p class="muted">Số điện thoại: <b><?= e($phone) ?></b><?= !empty($tgVerified) ? ' — đã xác thực qua Telegram ✅' : ' — mã OTP đã gửi' ?><?= isset($devCode) && $devCode ? ' (<code>' . e($devCode) . '</code>)' : '' ?>.</p>
+  <p class="muted">Số điện thoại: <b><?= e($phone) ?></b><?= !empty($tgVerified) ? ' — đã xác thực qua Telegram' : ' — mã OTP đã gửi' ?><?= isset($devCode) && $devCode ? ' (<code>' . e($devCode) . '</code>)' : '' ?>.</p>
   <form method="post" action="/register/verify" class="stack" data-started>
     <?= App\Csrf::field() ?>
     <input type="hidden" name="form_started" value="<?= time() ?>">

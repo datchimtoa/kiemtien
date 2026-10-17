@@ -68,10 +68,10 @@
             // Open the one-time PubCrypto link in a new tab so the user can complete it,
             // then automatically return to /tasks to pick the next task.
             window.open(o.j.redirect, '_blank', 'noopener');
-            btn.textContent = '✅ Đã mở — làm tiếp nhiệm vụ khác';
+            btn.textContent = 'Đã mở — làm tiếp nhiệm vụ khác';
             setTimeout(function () {
               btn.disabled = false;
-              btn.textContent = '🚀 Bắt đầu';
+              btn.textContent = 'Bắt đầu';
               location.href = '/tasks'; // refresh cooldown/quota state
             }, 3000);
             return;
@@ -98,7 +98,7 @@
       var elapsed = Math.floor((Date.now() - loadedAt) / 1000);
       countdowns.forEach(function (node) {
         var left = Math.max(0, Number(node.dataset.taskCooldown) - elapsed);
-        node.textContent = left > 0 ? '⏳ Chờ ' + left + 's' : 'Đang cập nhật...';
+        node.textContent = left > 0 ? 'Chờ ' + left + 's' : 'Đang cập nhật...';
       });
       if (!document.hidden && !startingTask && elapsed >= refreshAfter) {
         location.reload();
@@ -124,8 +124,8 @@
   if (urlParams.get('claim_done') === '1') {
     // User just completed a task (PubCrypto redirected back) → show a flash-like notice.
     var notice = document.createElement('div');
-    notice.className = 'flash success';
-    notice.textContent = '✅ Nhiệm vụ đang được xác nhận. Tiền sẽ tự cộng vào ví trong ít phút.';
+    notice.className = 'flash info';
+    notice.textContent = 'Nhiệm vụ đang được xác nhận. Phần thưởng chỉ được ghi nhận sau khi có xác nhận hợp lệ.';
     var first = document.querySelector('.page-head');
     if (first) { first.insertAdjacentElement('afterend', notice); }
   }

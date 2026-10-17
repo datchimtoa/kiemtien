@@ -1,6 +1,6 @@
 <div class="card">
-  <h2>Duyệt nhiệm vụ provider</h2>
-  <p><a href="/admin/settings">Cấu hình nguồn &amp; thù lao</a></p>
+  <div class="section-head"><div><span class="eyebrow">TASK2 / REVIEW QUEUE</span><h2>Duyệt nhiệm vụ provider</h2></div><a class="btn ghost" href="/admin/settings">Cấu hình nguồn &amp; thù lao</a></div>
+  <?php if (!$attempts): ?><div class="empty-state">Chưa có lượt nhiệm vụ cần đối chiếu.</div><?php endif; ?>
   <p class="hint">Chỉ duyệt sau khi đối chiếu mã application/link với tài khoản provider và doanh thu hợp lệ. Quay lại, screenshot hoặc timer không phải bằng chứng trả thưởng.</p>
   <?php foreach ($attempts as $attempt): ?>
     <fieldset>
@@ -18,7 +18,7 @@
           <input type="hidden" name="token" value="<?= e($attempt['token']) ?>">
           <label>Bằng chứng đối chiếu / lý do<input name="note" minlength="10" maxlength="300" required></label>
           <button class="btn" name="action" value="approve">Duyệt và cộng thưởng</button>
-          <button class="btn" name="action" value="reject">Từ chối</button>
+          <button class="btn danger" name="action" value="reject">Từ chối</button>
         </form>
       <?php endif; ?>
     </fieldset>

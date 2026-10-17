@@ -1,5 +1,7 @@
 <div class="card auth">
-<h2>Admin đăng nhập</h2>
+<span class="eyebrow auth-eyebrow">HTXG / OPERATIONS</span>
+<h2>Đăng nhập quản trị</h2>
+<p class="muted">Truy cập không gian điều hành và kiểm soát thanh toán.</p>
 <?php if ($error): ?><div class="flash error"><?= e($error) ?></div><?php endif; ?>
 <form method="post" action="/admin/login" class="stack">
   <?= App\Csrf::field() ?>

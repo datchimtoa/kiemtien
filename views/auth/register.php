@@ -21,7 +21,7 @@
   <p class="muted">Đã có tài khoản? <a href="/login">Đăng nhập</a></p>
 <?php else: ?>
   <?php if ($error): ?><div class="flash error"><?= e($error) ?></div><?php endif; ?>
-  <p class="muted">Số điện thoại: <b><?= e($phone) ?></b><?= !empty($tgVerified) ? ' — đã xác thực qua Telegram ✅' : ' — mã OTP đã gửi' ?><?= isset($devCode) && $devCode ? ' (DEV: <code>' . e($devCode) . '</code>)' : '' ?>.</p>
+  <p class="muted">Số điện thoại: <b><?= e($phone) ?></b><?= !empty($tgVerified) ? ' — đã xác thực qua Telegram ✅' : ' — mã OTP đã gửi' ?><?= isset($devCode) && $devCode ? ' (<code>' . e($devCode) . '</code>)' : '' ?>.</p>
   <form method="post" action="/register/verify" class="stack" data-started>
     <?= App\Csrf::field() ?>
     <input type="hidden" name="form_started" value="<?= time() ?>">

@@ -47,7 +47,7 @@ final class Tasks
             throw new \RuntimeException('Thù lao không hợp lệ.');
         }
         if ($provider === 'yeujob' && $reward === 0) {
-            throw new \RuntimeException('YeuJob V2 cần cấu hình thưởng cố định VND/lượt lớn hơn 0 trong Admin.');
+            throw new \RuntimeException('YeuJob V2 cần cấu hình thưởng cố định VND/lượt lớn hơn 0.');
         }
         $ip = client_ip();
         $share = max(0, min(100, self::setting($provider, 'share_percent')));
@@ -70,10 +70,10 @@ final class Tasks
             $ipLimit = self::setting($provider, 'ip_daily_limit');
             $hourLimit = Settings::getInt('task_max_completions_per_hour', 30);
             if ($userCount >= $dailyLimit) {
-                throw new \RuntimeException("Tài khoản đã dùng {$userCount}/{$dailyLimit} lượt của nguồn này trong 24 giờ gần nhất. Lượt lỗi sau khi gửi yêu cầu vẫn giữ chỗ; cần admin đối soát, không tự đặt lại lúc 0 giờ.");
+                throw new \RuntimeException("Tài khoản đã dùng {$userCount}/{$dailyLimit} lượt của nguồn này trong 24 giờ gần nhất. Lượt lỗi sau khi gửi yêu cầu vẫn giữ chỗ và không tự đặt lại lúc 0 giờ.");
             }
             if ($ipCount >= $ipLimit) {
-                throw new \RuntimeException("IP hiện tại đã dùng {$ipCount}/{$ipLimit} lượt của nguồn này trong 24 giờ gần nhất (tính cả tài khoản dùng chung IP). Vui lòng chờ lượt cũ hết hạn hoặc liên hệ admin đối soát.");
+                throw new \RuntimeException("IP hiện tại đã dùng {$ipCount}/{$ipLimit} lượt của nguồn này trong 24 giờ gần nhất (tính cả tài khoản dùng chung IP). Vui lòng chờ lượt cũ hết hạn hoặc liên hệ hỗ trợ.");
             }
             if ($hourCount >= $hourLimit) {
                 throw new \RuntimeException("Đã đạt giới hạn {$hourCount}/{$hourLimit} lần bắt đầu trong 60 phút gần nhất, tính cả lần tạo lỗi để chống spam. Vui lòng chờ lượt cũ ra khỏi khung 60 phút.");
@@ -191,7 +191,7 @@ final class Tasks
         $def = Catalog::get($row['provider']);
         if ($row['provider'] === 'yeujob') {
             if (str_starts_with($row['remote_id'], 'v2:')) {
-                return false; // V2 redirects are not payment proof; admin review only.
+                return false; // V2 redirects are not payment proof; explicit verification is required.
             }
             $data = Client::call('yeujob', $def['job']['status'], ['app_id' => $row['remote_id']]);
             if (in_array(Http::pick($data, 'data.status'), ['rejected', 'cancelled'], true)) {

@@ -39,11 +39,11 @@ final class Catalog
                 'kind'   => 'shortlink',
                 'verify' => 'manual',
                 'base'   => 'https://yeujob.com',
-                'docs'   => 'API V2 /st → shortenedUrl → làm job → quay lại chờ admin đối chiếu và duyệt thưởng. Không tự cộng tiền.',
+                'docs'   => 'API V2 /st → shortenedUrl → làm job → quay lại chờ xác minh kết quả. Không tự cộng tiền.',
                 'services' => [
                     ['id' => 'friend', 'label' => 'Nhận job Review Map / VIP'],
                 ],
-                'target_label' => 'URL quay lại được tạo tự động; admin duyệt thưởng cố định VND/lượt.',
+                'target_label' => 'URL quay lại được tạo tự động; thưởng cố định VND/lượt.',
                 'shorten' => [
                     'method' => 'GET',
                     'url' => 'https://yeujob.com/st',
@@ -105,7 +105,7 @@ final class Catalog
                 'verify' => 'manual',
                 'base'   => 'https://xtask.top',
                 'auth'   => 'bearer',
-                'docs'   => 'Tạo link: POST /api/public/v1/shorten (JSON, Bearer key). Admin đối chiếu và duyệt thưởng; chưa có schema xác nhận trả thưởng cho status API.',
+                'docs'   => 'Tạo link: POST /api/public/v1/shorten (JSON, Bearer key). Chưa có schema xác nhận trả thưởng cho status API.',
                 'services' => [
                     ['id' => 'traffic',            'label' => 'Traffic Google',      'type' => 'traffic'],
                     ['id' => 'direct',             'label' => 'Traffic Direct',      'type' => 'direct'],

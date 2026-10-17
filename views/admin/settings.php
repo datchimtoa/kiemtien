@@ -72,7 +72,7 @@
   <div class="card">
     <h3>Nguồn nhiệm vụ &amp; thù lao</h3>
     <p><a href="/admin/providers">Xem và duyệt nhiệm vụ provider</a></p>
-    <p class="hint">Quay lại trình duyệt không phải bằng chứng hoàn thành. YeuJob V2 chờ admin duyệt tay và cần thưởng cố định VND/lượt lớn hơn 0. Traffic24h (views_valid) có xác minh tự động; lượt YeuJob V1 cũ vẫn giữ tra cứu approved + paid. XTASK thiếu định dạng phản hồi status. Không cộng thưởng theo timer.</p>
+    <p class="hint">Quay lại trình duyệt không phải bằng chứng hoàn thành. YeuJob V2 cần thưởng cố định VND/lượt lớn hơn 0. Traffic24h (views_valid) có xác minh tự động; lượt YeuJob V1 cũ vẫn giữ tra cứu approved + paid. XTASK thiếu định dạng phản hồi status. Không cộng thưởng theo timer.</p>
     <?php foreach (\App\Providers\Catalog::definitions() as $providerId => $definition):
         $prefix = 'provider_' . $providerId . '_'; ?>
       <fieldset>
@@ -88,7 +88,7 @@
         <?php endforeach; ?>
         <?php foreach ($definition['services'] as $service): if ($service['id'] === 'no_ads') continue;
           $field = 'service_' . $service['id'] . '_reward_vnd'; ?>
-          <label><?= e($service['label']) ?> — VND/lượt (YeuJob V2: phải lớn hơn 0, admin duyệt tay)<input type="number" min="<?= $providerId === 'yeujob' ? 1 : 0 ?>" max="2000000" name="<?= e($prefix . $field) ?>" value="<?= e($settings[$prefix . $field] ?? $settings[$prefix . 'reward_vnd'] ?? $definition['defaults']['reward_vnd']) ?>" required></label>
+          <label><?= e($service['label']) ?> — VND/lượt (YeuJob V2: phải lớn hơn 0)<input type="number" min="<?= $providerId === 'yeujob' ? 1 : 0 ?>" max="2000000" name="<?= e($prefix . $field) ?>" value="<?= e($settings[$prefix . $field] ?? $settings[$prefix . 'reward_vnd'] ?? $definition['defaults']['reward_vnd']) ?>" required></label>
         <?php endforeach; ?>
       </fieldset>
     <?php endforeach; ?>

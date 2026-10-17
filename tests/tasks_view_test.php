@@ -32,7 +32,7 @@ foreach ($providers as $id => $definition) {
 $check('cards reuse existing task layout', str_contains($html, 'card task-card state-ok'));
 $check('no paid no-ad service', !str_contains($html, 'name="service" value="no_ads"'));
 $check('new providers visible when old provider fails', str_contains($html, '/tasks/provider/start'));
-$check('YeuJob V2 card explains manual review', str_contains($html, 'YeuJob V2: admin duyệt thưởng thủ công'));
+$check('YeuJob V2 card explains pending verification', str_contains($html, 'YeuJob V2: chờ xác minh kết quả'));
 $check('task list links to separate history', str_contains($html, 'href="/tasks/history"'));
 $check('task list has no separate source sections or history table', !str_contains($html, 'Nhiệm vụ từ đối tác') && !str_contains($html, 'Nhiệm vụ PubCrypto') && !str_contains($html, '<table>'));
 $data['res'] = ['ok' => true, 'tasks' => [[
@@ -70,7 +70,7 @@ $html = View::render('tasks/history', $data, null);
 $check('V2 before return shows in progress without polling', str_contains($html, 'Đang làm nhiệm vụ') && !str_contains($html, 'Kiểm tra xác nhận'));
 $data['providerAttempts'][0]['returned_at'] = now();
 $html = View::render('tasks/history', $data, null);
-$check('V2 pending shows manual review without poll button', str_contains($html, 'Chờ admin duyệt') && !str_contains($html, 'Kiểm tra xác nhận'));
+$check('V2 pending shows verification without poll button', str_contains($html, 'Chờ xác minh') && !str_contains($html, 'Kiểm tra xác nhận'));
 $data['providerAttempts'] = [];
 $data['providerAttempts'] = [[
     'id' => 2, 'provider' => 'yeujob', 'service' => 'friend', 'remote_id' => null,
@@ -84,7 +84,7 @@ try {
     $html = View::render('tasks/history', $data, null);
     $check('failed YeuJob with null remote ID renders without warnings', str_contains($html, 'Tạo thất bại'));
     $html = View::render('admin/providers', ['attempts' => [array_merge($data['providerAttempts'][0], ['user_id' => 1, 'ip' => '203.0.113.1'])]], null);
-    $check('admin failed YeuJob with null remote ID renders without warnings', str_contains($html, 'failed'));
+    $check('failed YeuJob with null remote ID renders without warnings', str_contains($html, 'failed'));
 } finally {
     restore_error_handler();
 }

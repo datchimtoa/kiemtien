@@ -34,7 +34,7 @@ final class ProviderController
                     . ' @ ' . $cause->getFile() . ':' . $cause->getLine() . "\n" . $cause->getTraceAsString());
                 Session::flash('error', 'Không tạo được nhiệm vụ do lỗi hệ thống. Mã lỗi: ' . $ref . '. Vui lòng gửi mã này cho hỗ trợ.');
             } else {
-                Session::flash('error', $e->getMessage());
+                Session::flash('error', 'Không tạo được nhiệm vụ. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.');
             }
             redirect('/tasks');
         }
@@ -47,10 +47,10 @@ final class ProviderController
         header('Referrer-Policy: no-referrer');
         try {
             Tasks::returned((int)$user['id'], $token);
-            Session::flash('info', 'Đã ghi nhận quay lại. Nhiệm vụ đang chờ xác nhận hoặc admin đối chiếu và duyệt thưởng; chưa cộng tiền.');
+            Session::flash('info', 'Đã ghi nhận quay lại. Nhiệm vụ đang chờ xác minh; chưa cộng tiền.');
         } catch (\Throwable $e) {
             \App\Risk::event((int)$user['id'], 'provider_return_invalid', 'medium', substr($e->getMessage(), 0, 200));
-            Session::flash('error', $e->getMessage());
+            Session::flash('error', 'Không ghi nhận được lượt quay lại. Vui lòng thử lại từ lịch sử nhiệm vụ hoặc liên hệ hỗ trợ.');
         }
         redirect('/tasks/history');
     }

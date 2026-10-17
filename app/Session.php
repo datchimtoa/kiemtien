@@ -6,10 +6,82 @@ namespace App;
 /**
  * Hardened session bootstrap + current-user context.
  */
+final class DatabaseSessionHandler implements \SessionHandlerInterface
+{
+    public function __construct(private readonly int $lifetime)
+    {
+    }
+
+    public function open(string $path, string $name): bool
+    {
+        return true;
+    }
+
+    public function close(): bool
+    {
+        return true;
+    }
+
+    public function read(string $id): string
+    {
+        try {
+            $row = Database::one('SELECT data, last_activity FROM app_sessions WHERE id = ?', [$id]);
+            if ($row === null) {
+                return '';
+            }
+            if ((int)$row['last_activity'] < time() - $this->lifetime) {
+                $this->destroy($id);
+                return '';
+            }
+            return (string)$row['data'];
+        } catch (\Throwable $e) {
+            error_log('[session] read failed: ' . $e->getMessage());
+            return '';
+        }
+    }
+
+    public function write(string $id, string $data): bool
+    {
+        try {
+            Database::upsert('app_sessions', [
+                'id' => $id,
+                'data' => $data,
+                'last_activity' => time(),
+            ], 'id', ['data', 'last_activity']);
+            return true;
+        } catch (\Throwable $e) {
+            error_log('[session] write failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function destroy(string $id): bool
+    {
+        try {
+            Database::run('DELETE FROM app_sessions WHERE id = ?', [$id]);
+            return true;
+        } catch (\Throwable $e) {
+            error_log('[session] destroy failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function gc(int $max_lifetime): int|false
+    {
+        try {
+            return Database::run('DELETE FROM app_sessions WHERE last_activity < ?', [time() - $max_lifetime])->rowCount();
+        } catch (\Throwable $e) {
+            error_log('[session] gc failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
 final class Session
 {
     private static ?array $user = null;
     private static bool $loaded = false;
+    private static ?DatabaseSessionHandler $handler = null;
 
     public static function start(): void
     {
@@ -24,19 +96,30 @@ final class Session
             $secure = false;
         }
         session_name($cfg['name'] ?? 'emvsid');
+        $lifetime = (int)($cfg['lifetime'] ?? 604800);
         session_set_cookie_params([
-            'lifetime' => (int)($cfg['lifetime'] ?? 604800),
+            'lifetime' => $lifetime,
             'path'     => '/',
             'domain'   => '',
             'secure'   => $secure,
             'httponly' => true,
             'samesite' => 'Lax',
         ]);
+        ini_set('session.use_strict_mode', '1');
+        ini_set('session.use_only_cookies', '1');
         $savePath = STORAGE_PATH . '/sessions';
         if (!is_dir($savePath)) {
             mkdir($savePath, 0770, true);
         }
         session_save_path($savePath);
+        try {
+            Database::value('SELECT 1 FROM app_sessions LIMIT 1');
+            self::$handler = new DatabaseSessionHandler($lifetime);
+            session_set_save_handler(self::$handler, true);
+        } catch (\Throwable $e) {
+            // Keep boot working if the database schema is unavailable.
+            error_log('[session] database storage unavailable; using files: ' . $e->getMessage());
+        }
         session_start();
 
         // Session fixation protection on privilege change.

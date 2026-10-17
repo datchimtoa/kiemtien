@@ -5,7 +5,7 @@
 <?php if ($res['ok'] && !empty($res['tasks'])): ?>
 <p class="hint muted" data-task-refresh="<?= max(5, (int)($res['meta']['refresh_after'] ?? 45)) ?>">Trạng thái nhiệm vụ tự cập nhật. Khi hết thời gian chờ, hệ thống kiểm tra lại với nhà cung cấp.</p>
 <?php endif; ?>
-  <p class="hint">Không cộng tiền chỉ vì quay lại. Phần thưởng chờ xác nhận API / postback có chữ ký hoặc admin kiểm tra. Không dùng nhiều tài khoản, chia sẻ link hay bỏ qua các bước.</p>
+  <p class="hint">Không cộng tiền chỉ vì quay lại. Phần thưởng chờ xác nhận API hoặc postback có chữ ký. Không dùng nhiều tài khoản, chia sẻ link hay bỏ qua các bước.</p>
   <div class="task-grid">
   <?php $enabledProviders = 0; ?>
   <?php foreach ($providers as $providerId => $definition):
@@ -27,7 +27,7 @@
       <div class="task-meta">
         <span class="pill <?= $ready ? 'ok' : 'warn' ?>"><?= $ready ? '✅ Khả dụng' : ($wait > 0 ? '⏳ Chờ ' . $wait . 's' : '🔒 Hết lượt 24h') ?></span>
         <span class="muted">Còn tối đa <?= max(0, $limit - $count) ?>/<?= $limit ?> lượt / 24h · tối thiểu <?= \App\Providers\Tasks::setting($providerId, 'min_seconds') ?>s</span>
-        <span class="muted"><?= $providerId === 'yeujob' ? 'YeuJob V2: admin duyệt thưởng thủ công' : ($providerId === 'xtask' ? 'XTask: admin đối chiếu và duyệt thưởng' : ($apiProof ? 'Xác minh qua API đối tác' : 'Chờ duyệt hoặc callback có xác thực')) ?> · còn áp dụng giới hạn IP</span>
+        <span class="muted"><?= $providerId === 'yeujob' ? 'YeuJob V2: chờ xác minh kết quả' : ($providerId === 'xtask' ? 'XTask: chờ xác minh kết quả' : ($apiProof ? 'Xác minh qua API đối tác' : 'Chờ xác nhận hoặc callback có xác thực')) ?> · còn áp dụng giới hạn IP</span>
       </div>
       <form method="post" action="/tasks/provider/start" target="_blank" rel="noopener noreferrer" class="provider-start">
         <?= \App\Csrf::field() ?>
@@ -42,7 +42,7 @@
   <div class="card"><div class="flash error"><?= e($res['error']) ?></div></div>
 <?php else: ?>
   <?php foreach ($res['tasks'] as $t):
-    // Member chỉ thấy số VND họ nhận — KHÔNG hiển thị rate admin (USD) anywhere.
+    // Members only see their VND amount, never the internal USD rate.
     $memberVnd = (int)floor($t["member_reward"]);
     $state = $t['cooldown_remaining'] > 0 ? 'cool' : ($t['available'] ? 'ok' : 'off');
     $remaining = max(0, $t['remaining_in_cycle']);

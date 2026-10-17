@@ -195,10 +195,8 @@ final class AuthController
     public static function postRegisterTelegram(): void
     {
         Csrf::check();
-        // Trước đây hàm này CHỈ đọc Session::get('reg_phone') — biến đó chỉ được tạo bởi
-        // luồng SMS (postPhone). Người dùng nhập số ở bước 1 rồi bấm nút Telegram (cùng form,
-        // formaction="/register/telegram") → session rỗng → redirect im lặng → trang như
-        // "tự tải lại" mà không xác thực gì. Nay đọc số điện thoại trực tiếp từ form.
+        // Read the submitted phone as well as the session value so this form works
+        // when the first registration step uses Telegram directly.
         $rawPhone = (string)input('phone', '');
         $phone = null;
         if ($rawPhone !== '') {

@@ -12,11 +12,11 @@ final class TransactionPresenter
     {
         return match ($type) {
             Wallet::TYPE_TASK_REWARD   => 'Thưởng nhiệm vụ',
-            Wallet::TYPE_TASK_PENDING  => 'Nhiệm vụ (chờ duyệt)',
+            Wallet::TYPE_TASK_PENDING  => 'Nhiệm vụ (đang xác minh)',
             Wallet::TYPE_TASK_CHARGEBK => 'Hoàn thuồng (chargeback)',
             Wallet::TYPE_WITHDRAW_HOLD => 'Rút tiền (tạm giữ)',
             Wallet::TYPE_WITHDRAW_REF  => 'Hoàn tiền rút bị từ chối',
-            Wallet::TYPE_ADMIN_ADJUST  => 'Điều chỉnh bởi admin',
+            Wallet::TYPE_ADMIN_ADJUST  => 'Điều chỉnh số dư',
             default => $type,
         };
     }

@@ -8,7 +8,7 @@ use PDO;
 /**
  * Anticheat / risk engine.
  * Central place for multi-account, velocity and sanity checks. Every decision
- * is persisted to risk_events for admin review.
+ * is persisted to risk_events for later review.
  */
 final class Risk
 {

@@ -46,13 +46,13 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'self'; base-uri 'self'");
 
-Session::start();
 try {
     Database::migrate();
 } catch (\Throwable $e) {
     // Lỗi migrate không được làm chết cả site: các bảng chính đã có sẵn, ghi log để xử lý sau.
     error_log('[migrate] failed: ' . $e->getMessage());
 }
+Session::start();
 \App\RateUpdater::refresh();
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';

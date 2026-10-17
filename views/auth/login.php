@@ -15,7 +15,7 @@
   </form>
   <p class="muted">Chưa có tài khoản? <a href="/register">Đăng ký</a></p>
 <?php else: ?>
-  <p>Thiết bị mới được phát hiện. Nhập mã OTP gửi tới <b><?= e($phone) ?></b><?= $devCode ? ' (DEV: <code>' . e($devCode) . '</code>)' : '' ?>:</p>
+  <p>Thiết bị mới được phát hiện. Nhập mã OTP gửi tới <b><?= e($phone) ?></b><?= $devCode ? ' (<code>' . e($devCode) . '</code>)' : '' ?>:</p>
   <form method="post" action="/login/otp" class="stack">
     <?= App\Csrf::field() ?>
     <label>Mã OTP
